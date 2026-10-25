@@ -83,15 +83,19 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
 
         {data && (
           <>
-            <header>
-              <p className="text-xs font-semibold uppercase tracking-widest">
-                <span className="text-[#E23744]">Zomato</span>
-                <span className="text-stone-900">-Lite</span>
-              </p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight">{data.name}</h1>
-              <p className="mt-2 text-sm text-stone-500">
-                {data.cuisine} · {data.area}
-              </p>
+            <header className="relative overflow-hidden rounded-lg p-6">
+              <div aria-hidden="true" className="absolute inset-0 bg-[url('/burrito.jpg')] bg-cover bg-center" />
+              <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-white via-white/85 to-white/10" />
+              <div className="relative">
+                <p className="text-xs font-semibold uppercase tracking-widest">
+                  <span className="text-[#E23744]">Zomato</span>
+                  <span className="text-stone-900">-Lite</span>
+                </p>
+                <h1 className="mt-2 text-3xl font-semibold tracking-tight">{data.name}</h1>
+                <p className="mt-2 text-sm text-stone-500">
+                  {data.cuisine} · {data.area}
+                </p>
+              </div>
             </header>
 
             {data.totalReviews === 0 ? (
