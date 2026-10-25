@@ -84,7 +84,10 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
         {data && (
           <>
             <header>
-              <p className="text-xs font-semibold uppercase tracking-widest text-stone-500">Zomato-Lite</p>
+              <p className="text-xs font-semibold uppercase tracking-widest">
+                <span className="text-[#E23744]">Zomato</span>
+                <span className="text-stone-900">-Lite</span>
+              </p>
               <h1 className="mt-2 text-3xl font-semibold tracking-tight">{data.name}</h1>
               <p className="mt-2 text-sm text-stone-500">
                 {data.cuisine} · {data.area}
@@ -112,7 +115,7 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
 
                 {data.latestReview && (
                   <section>
-                    <p className="text-xs font-semibold uppercase tracking-widest text-amber-700">Latest review</p>
+                    <p className="text-xs font-semibold uppercase tracking-widest text-[#E23744]">Latest review</p>
                     <article className="mt-3 rounded-lg border border-stone-200 bg-white p-5">
                       <Stars rating={data.latestReview.rating} />
                       <p className="mt-3 text-lg">{data.latestReview.comment}</p>
