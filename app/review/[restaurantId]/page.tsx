@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 type Restaurant = {
   name: string;
@@ -92,6 +93,12 @@ export default function ReviewPage({ params }: { params: Promise<{ restaurantId:
   return (
     <main className="min-h-screen bg-[#FAF9F6] px-6 py-16 text-stone-900">
       <div className="mx-auto max-w-[560px] space-y-10">
+        <Link
+          href={`/restaurant/${restaurantId}`}
+          className="inline-block rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-800 transition-colors hover:bg-stone-100"
+        >
+          ← Back to reviews
+        </Link>
         <header>
           <p className="text-xs font-semibold uppercase tracking-widest">
             <span className="text-[#E23744]">Zomato</span>
