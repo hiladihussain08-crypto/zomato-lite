@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { sql } from "@/lib/db";
+import { q } from "@/lib/db";
 
 // GET = "give me something." Reads only. Changes nothing in the database.
 // Response shape mirrors the screen: name, big average, latest review, older list.
@@ -24,7 +24,7 @@ export async function GET(
   const restaurantId = Number(id);
 
   // Does the restaurant exist? If not: 404 and nothing else is computed.
-  const restaurantRows = await sql.query(
+  const restaurantRows = await q(
     "SELECT id, name, cuisine, area FROM restaurants WHERE id = $1",
     [restaurantId]
   );
@@ -37,7 +37,7 @@ export async function GET(
   // averageRating comes from AVG(rating), totalReviews from COUNT(*) - in ONE server trip.
   // Both always answer, even when no reviews exist: COUNT says 0, AVG says NULL.
   // The backend does not pretend an empty list has an average - it reports null.
-  const aggregateRows = await sql.query(
+  const aggregateRows = await q(
     "SELECT AVG(rating) AS average, COUNT(*) AS total FROM reviews WHERE restaurant_id = $1",
     [restaurantId]
   );
@@ -49,7 +49,7 @@ export async function GET(
   // Latest review (newest by created_at) separately...
   const latestRows =
     totalReviews > 0
-      ? await sql.query(
+      ? await q(
           "SELECT id, rating, comment, created_at FROM reviews WHERE restaurant_id = $1 ORDER BY created_at DESC LIMIT 1",
           [restaurantId]
         )
@@ -57,7 +57,7 @@ export async function GET(
   // ...and every review after it, newest first - so the page never prints the latest one twice.
   const olderRows =
     totalReviews > 1
-      ? await sql.query(
+      ? await q(
           "SELECT id, rating, comment, created_at FROM reviews WHERE restaurant_id = $1 AND id <> $2 ORDER BY created_at DESC",
           [restaurantId, latestRows[0].id]
         )

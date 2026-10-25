@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { sql } from "@/lib/db";
+import { q } from "@/lib/db";
 
 // POST = "here, take this." One address, one job: save one review.
 //
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
-  const exists = await sql.query("SELECT 1 FROM restaurants WHERE id = $1", [restaurantId]);
+  const exists = await q("SELECT 1 FROM restaurants WHERE id = $1", [restaurantId]);
   if (exists.length === 0) {
     return NextResponse.json({ error: "This restaurant does not exist" }, { status: 400 });
   }
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
   // Every check passed. Write exactly one row of fact. Nothing else changes.
   // $1/$2/$3 are placeholders: values travel separately from SQL text,
   // so a stray apostrophe or a hostile string can never become code.
-  const inserted = await sql.query(
+  const inserted = await q(
     "INSERT INTO reviews (restaurant_id, rating, comment) VALUES ($1, $2, $3) RETURNING id",
     [restaurantId, rating, comment]
   );
