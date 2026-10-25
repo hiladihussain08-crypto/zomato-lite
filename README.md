@@ -1,36 +1,49 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Zomato Lite
 
-## Getting Started
+A one-restaurant review product, small on purpose. Two screens, two APIs, two database tables — and one live URL:
 
-First, run the development server:
+**https://zomato-lite-omega-seven.vercel.app**
+
+- Restaurant page: `/restaurant/1`
+- Write a review: `/review/1`
+
+## The idea inside
+
+Store **facts** (one row per review: rating, comment, timestamp). Compute **answers** on request.
+
+- There is no `average_rating` column and no `latest_review` column. The backend runs
+  `AVG(rating)` / `COUNT(*)` / newest-first order **on every page load**, so stored values can
+  never drift from the truth.
+- The frontend has zero maths: it receives `4.5` and prints `4.5`.
+- Both the API and the database validate input: the rating must be an integer 1–5 — checked at
+  three layers (UI kindness, backend security, database `CHECK`) because anyone with a terminal
+  can talk to the API directly.
+
+## Where things live
+
+| Layer | Files |
+|---|---|
+| Frontend | `app/page.tsx`, `app/restaurant/[id]/page.tsx`, `app/review/[restaurantId]/page.tsx` |
+| Backend | `app/api/reviews/route.ts`, `app/api/restaurants/[id]/route.ts`, `lib/db.ts` |
+| Database | `db/schema.sql`, `db/seed.sql`, `scripts/db-setup.mjs` |
+| Config | `package.json`, `tsconfig.json`, `next.config.ts`, `.env.local` (never committed) |
+
+## Endpoints
+
+| Endpoint | Behaviour |
+|---|---|
+| `POST /api/reviews` | `{ restaurantId, rating, comment }` → 3 checks → insert one row → `201 { success, reviewId }` or `400 { error }` |
+| `GET /api/restaurants/[id]` | name, cuisine, area, `averageRating` (1 decimal), `totalReviews`, `latestReview` (newest), `reviews` (the rest, newest first) → `404` if unknown restaurant |
+
+## Run it locally
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+# put your Neon connection string in .env.local as DATABASE_URL (it is git-ignored)
+npm run db:setup   # rebuild the two tables + seed Ludhiana Burrito with 3 reviews
+npm run dev        # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Deployed
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Connected to GitHub: every push to `main` builds and releases to production via Vercel — no deploy commands, tickets, or humans required.
