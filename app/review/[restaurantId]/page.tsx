@@ -93,7 +93,8 @@ export default function ReviewPage({ params }: { params: Promise<{ restaurantId:
     <main className="min-h-screen bg-[#FAF9F6] px-6 py-16 text-stone-900">
       <div className="mx-auto max-w-[560px] space-y-10">
         <header>
-          <h1 className="text-3xl font-semibold tracking-tight">
+          <p className="text-xs font-semibold uppercase tracking-widest text-stone-500">Zomato-Lite</p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight">
             {restaurant === null ? "Loading…" : restaurant.name}
           </h1>
           {restaurant !== null && (

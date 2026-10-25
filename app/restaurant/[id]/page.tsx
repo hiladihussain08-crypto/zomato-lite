@@ -84,7 +84,8 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
         {data && (
           <>
             <header>
-              <h1 className="text-3xl font-semibold tracking-tight">{data.name}</h1>
+              <p className="text-xs font-semibold uppercase tracking-widest text-stone-500">Zomato-Lite</p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight">{data.name}</h1>
               <p className="mt-2 text-sm text-stone-500">
                 {data.cuisine} · {data.area}
               </p>
