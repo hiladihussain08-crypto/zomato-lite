@@ -148,7 +148,7 @@ export default function ReviewPage({ params }: { params: Promise<{ restaurantId:
           <button
             type="submit"
             disabled={submitting || rating === 0 || comment.trim().length === 0}
-            className="w-full rounded-lg bg-amber-700 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-amber-800 disabled:cursor-not-allowed disabled:opacity-40"
+            className="w-full rounded-lg border-2 border-black bg-white py-3.5 text-sm font-semibold text-black transition-colors hover:border-[#E23744] hover:bg-[#E23744] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
           >
             {submitting ? "Sending…" : "Submit review"}
           </button>
