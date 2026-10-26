@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<!--
+  Zomato-Lite · Reviews-page redesign (prototype)
+  - Self-contained HTML/CSS/JS, no dependencies, no build step.
+  - Sample data as briefed; helpful counts are local and optimistic (no backend).
+  - Relative dates are anchored to Oct 26 2026 so the sample reads exactly as spec'd.
+  - Static data + a /write placeholder route, per brief. The live product page is untouched.
+  - Contrast flags (see delivery notes): white on #E23744 ≈ 4.3:1 (AA large ✓, normal text ✗),
+    white on #CB2F3B ≈ 5.2:1 ✓; green chip #1A7F4B/#E6F4EC ≈ 4.4:1.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#FAF9F6" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)">
+  <title>Ludhiana Burrito · Reviews — Zomato-Lite</title>
+  <style>
+    /* ---------- tokens (light) ---------- */
+    :root {
+      --brand: #E23744;
+      --brand-hover: #CB2F3B;
+      --bg: #FAF9F6;
+      --card: #FFFFFF;
+      --border: #ECE9E4;
+      --text: #1C1C1C;
+      --secondary: #6B6B6B;
+      --muted: #A3A3A3;
+      --star: #E07B00;
+      --rec-bg: #E6F4EC;
+      --rec-text: #1A7F4B;
+      --skip-bg: #F1F0ED;
+      --skip-text: #6B6B6B;
+      --sklt: #EDEBE7;
+      --on-brand: #FFFFFF;
+    }
+    /* ---------- tokens (dark) ---------- */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #121212;
+        --card: #1B1B1B;
+        --border: #2C2C2C;
+        --text: #F4F4F3;
+        --secondary: #ABABA8;
+        --muted: #6E6E6B;
+        --rec-bg: #132F20;
+        --rec-text: #7BD8A3;
+        --skip-bg: #242423;
+        --skip-text: #ABABA8;
+        --sklt: #242423;
+      }
+    }
+
+    * { box-sizing: border-box; }
+    html { color-scheme: light dark; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.45;
+      -webkit-font-smoothing: antialiased;
+    }
+    .page { max-width: 480px; margin: 0 auto; }
+
+    /* ---------- focus & motion ---------- */
+    :focus { outline: none; }
+    :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+    button { font: inherit; color: inherit; cursor: pointer; }
+    button, .cta { -webkit-tap-highlight-color: transparent; }
+    .press { transition: transform 150ms ease; }
+    .press:active { transform: scale(0.97); }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        transition-duration: .01ms !important;
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+      }
+    }
+
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+    }
+    .hidden { display: none !important; }
+    .linklike {
+      background: none; border: 0; padding: 0;
+      color: var(--brand); font-size: 13px; font-weight: 600;
+      text-decoration: underline; text-underline-offset: 2px;
+      position: relative;
+    }
+    .linklike::after { content: ""; position: absolute; inset: -7px -6px; }
+
+    /* ---------- 1. hero ---------- */
+    .hero {
+      position: relative;
+      height: 150px;
+      overflow: hidden;
+      border-radius: 0 0 16px 16px;
+    }
+    .hero-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .hero-scrim-b { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0) 30%, rgba(0,0,0,.62) 100%); }
+    .hero-scrim-t { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.34), rgba(0,0,0,0) 56px); }
+    .wordmark {
+      position: absolute; top: 12px; left: 16px; z-index: 2;
+      display: inline-block;
+      background: rgba(250, 249, 246, .9);
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 11px; font-weight: 600;
+      letter-spacing: .18em; text-transform: uppercase;
+    }
+    .wordmark .wm-red { color: var(--brand); }
+    .wordmark .wm-dark { color: #1C1C1C; }
+    .hero-bottom { position: absolute; left: 16px; right: 16px; bottom: 12px; z-index: 1; }
+    .hero-name { margin: 0; font-size: 24px; font-weight: 600; color: #FFFFFF; line-height: 1.2; }
+    .hero-meta { margin: 2px 0 0; font-size: 13px; color: rgba(255,255,255,.92); }
+
+    /* ---------- main column ---------- */
+    main { padding: 24px 16px 112px; }
+
+    /* ---------- 2. rating summary ---------- */
+    .summary { display: flex; gap: 20px; align-items: flex-start; }
+    .summary-left { flex: 0 0 auto; min-width: 92px; }
+    .rating-num { margin: 0; font-size: 40px; font-weight: 600; line-height: 1; letter-spacing: -0.01em; }
+    .stars { margin: 6px 0 0; font-size: 15px; letter-spacing: 2px; line-height: 1; }
+    .stars .s-on { color: var(--star); }
+    .stars .s-off { color: var(--muted); }
+    .review-count { margin: 8px 0 0; font-size: 13px; color: var(--secondary); }
+    .summary-bars { flex: 1 1 auto; }
+    .bar-row {
+      display: flex; align-items: center; gap: 8px;
+      width: 100%; padding: 13px 8px; margin: 0 -8px;
+      background: none; border: 0; border-radius: 12px;
+      position: relative; text-align: left;
+    }
+    .bar-row:hover { background: var(--skip-bg); }
+    .bar-label { font-size: 12px; font-weight: 600; color: var(--secondary); width: 10px; flex: 0 0 auto; }
+    .bar-track { flex: 1 1 auto; height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
+    .bar-fill { display: block; height: 100%; border-radius: 3px; background: var(--brand); transition: opacity 150ms ease; }
+    .bar-count { font-size: 12px; color: var(--secondary); width: 16px; text-align: right; flex: 0 0 auto; }
+    .bar-row .bar-fill, .bar-row .bar-count { opacity: 1; }
+    .bar-row.dim .bar-fill { opacity: .4; }
+    .bar-row.dim .bar-count { opacity: .4; }
+    .clear-rating { display: inline-block; margin: 2px 0 0 8px; }
+    .helper { margin: 6px 0 0 8px; font-size: 13px; color: var(--muted); }
+
+    /* ---------- 3. dish chips ---------- */
+    .dishes { margin-top: 32px; }
+    .section-heading { margin: 0 0 12px; font-size: 13px; font-weight: 600; color: var(--text); }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      min-height: 44px;
+      padding: 6px 14px;
+      border: 0; border-radius: 999px;
+      font-size: 13px; font-weight: 600;
+      transition: opacity 150ms ease, box-shadow 150ms ease;
+    }
+    .chip svg { width: 14px; height: 14px; flex: 0 0 auto; }
+    .chip.recommend { background: var(--rec-bg); color: var(--rec-text); }
+    .chip.skip { background: var(--skip-bg); color: var(--skip-text); }
+    .chip[aria-pressed="true"].recommend { outline: 1.5px solid var(--rec-text); outline-offset: 1px; }
+    .chip[aria-pressed="true"].skip { outline: 1.5px solid var(--skip-text); outline-offset: 1px; }
+
+    /* ---------- 4. review list ---------- */
+    .reviews { margin-top: 32px; }
+    .review-list { display: flex; flex-direction: column; gap: 12px; transition: opacity 150ms ease; }
+    .review-list.fading { opacity: 0; }
+    .review-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 12px;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .card-top { display: flex; align-items: center; gap: 8px; }
+    .badge {
+      background: var(--brand); color: var(--on-brand);
+      font-size: 13px; font-weight: 600;
+      padding: 3px 8px; border-radius: 6px; line-height: 1.3;
+    }
+    .latest-tag {
+      border: 1px solid var(--brand); color: var(--brand);
+      font-size: 11px; font-weight: 600;
+      padding: 2px 7px; border-radius: 6px; line-height: 1.3;
+    }
+    .date { margin-left: auto; font-size: 13px; color: var(--secondary); white-space: nowrap; }
+    .review-text { margin: 0; font-size: 15px; }
+    .review-text.clamped {
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .read-more {
+      align-self: flex-start;
+      background: none; border: 0; padding: 0;
+      color: var(--brand); font-size: 13px; font-weight: 600;
+      text-decoration: underline; text-underline-offset: 2px;
+      position: relative;
+    }
+    .read-more::after { content: ""; position: absolute; inset: -7px -6px; }
+    .dish-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+    .dish-tag {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 10px; border-radius: 999px;
+      font-size: 12px; font-weight: 600;
+    }
+    .dish-tag svg { width: 11px; height: 11px; }
+    .dish-tag.recommend { background: var(--rec-bg); color: var(--rec-text); }
+    .dish-tag.skip { background: var(--skip-bg); color: var(--skip-text); }
+    .dish-tag:not(:first-child) { margin-top: 0; }
+    .card-foot { display: flex; }
+    .helpful {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 10px;
+      background: none; border: 1px solid var(--border); border-radius: 999px;
+      font-size: 13px; font-weight: 600; color: var(--secondary);
+      position: relative;
+      transition: color 150ms ease, border-color 150ms ease;
+    }
+    .helpful::after { content: ""; position: absolute; inset: -6px; }
+    .helpful svg { width: 14px; height: 14px; }
+    .helpful:hover { color: var(--text); }
+    .helpful.on { color: var(--rec-text); border-color: var(--rec-text); }
+    .hcount { font-size: 12px; }
+
+    /* ---------- empty states ---------- */
+    .empty {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px 12px;
+      text-align: center;
+      display: flex; flex-direction: column; gap: 8px; align-items: center;
+    }
+    .empty p { margin: 0; color: var(--secondary); }
+
+    /* ---------- 5. sticky bar ---------- */
+    .sticky-bar {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      margin-inline: auto;
+      max-width: 480px;
+      background: var(--card);
+      border-top: 1px solid var(--border);
+      padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+      z-index: 10;
+    }
+    .cta {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      width: 100%; height: 48px;
+      background: var(--brand); color: var(--on-brand);
+      border-radius: 12px;
+      font-size: 16px; font-weight: 600;
+      text-decoration: none;
+      transition: background-color 150ms ease;
+    }
+    .cta:hover { background: var(--brand-hover); }
+    .cta:active { transform: scale(0.99); }
+    .cta svg { width: 18px; height: 18px; }
+
+    /* ---------- skeletons ---------- */
+    .sk { background: var(--sklt); border-radius: 8px; animation: skpulse 1.2s ease-in-out infinite; }
+    @keyframes skpulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <!-- 1 · hero -->
+    <header class="hero" id="hero">
+      <img class="hero-img" src="/burrito.jpg" alt="Stuffed burritos stacked on a wooden board">
+      <div class="hero-scrim-t" aria-hidden="true"></div>
+      <div class="hero-scrim-b" aria-hidden="true"></div>
+      <span class="wordmark"><span class="wm-red">Zomato</span><span class="wm-dark">-Lite</span></span>
+      <div class="hero-bottom">
+        <h1 class="hero-name">Ludhiana Burrito</h1>
+        <p class="hero-meta">Indian · Sector 32</p>
+      </div>
+    </header>
+
+    <main>
+      <!-- 2 · rating summary -->
+      <section class="summary" aria-label="Rating summary">
+        <div class="summary-left">
+          <p class="rating-num">3.7</p>
+          <p class="stars" aria-label="3.7 out of 5 stars">
+            <span class="s-on">★</span><span class="s-on">★</span><span class="s-on">★</span><span class="s-off">☆</span><span class="s-off">☆</span>
+          </p>
+          <p class="review-count">9 reviews</p>
+        </div>
+        <div class="summary-bars" role="group" aria-label="Filter reviews by rating">
+          <div id="barRows"></div>
+          <button class="linklike clear-rating hidden" id="clearRating" type="button">Clear filter</button>
+          <p class="helper" id="barHelper">Tap a bar to filter reviews</p>
+        </div>
+      </section>
+
+      <!-- 3 · dish chips -->
+      <section class="dishes" aria-labelledby="dishHeading">
+        <h2 class="section-heading" id="dishHeading">What people say about the food</h2>
+        <div class="chips" id="dishChips" role="group" aria-label="Filter reviews by dish"></div>
+        <p class="helper" style="margin-left:0">Tap a dish to see reviews that mention it</p>
+      </section>
+
+      <!-- 4 · reviews -->
+      <section class="reviews" aria-labelledby="reviewsHeading">
+        <h2 id="reviewsHeading" class="sr-only">Reviews</h2>
+        <div class="review-list" id="reviewList"></div>
+        <div class="empty hidden" id="emptyState">
+          <p>No reviews match this filter</p>
+          <button class="linklike" id="clearAll" type="button">Clear filters</button>
+        </div>
+        <div class="empty hidden" id="zeroState">
+          <p>No reviews yet. Be the first to share one.</p>
+        </div>
+      </section>
+    </main>
+
+    <!-- 5 · sticky action bar -->
+    <footer class="sticky-bar" id="stickyBar">
+      <a class="cta" href="/write">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+        Write a review
+      </a>
+    </footer>
+  </div>
+
+  <script>
+    "use strict";
+    var REDUCED = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    /* ---------- sample data (as briefed; relative dates anchored to Oct 26 2026) ---------- */
+    var NOW = new Date(2026, 9, 26);
+    var DIST = [
+      { stars: 5, n: 4 }, { stars: 4, n: 3 }, { stars: 3, n: 1 }, { stars: 2, n: 0 }, { stars: 1, n: 1 }
+    ];
+    var DISHES = [
+      { name: "Paneer burrito", state: "recommend", n: 6 },
+      { name: "Chicken wrap", state: "recommend", n: 3 },
+      { name: "Fries", state: "skip", n: 2 }
+    ];
+    var REVIEWS = [
+      { id: 1, stars: 3, text: "Great", when: new Date(2026, 9, 25, 14, 37), full: "Oct 25, 2026, 2:37 PM",
+        dishes: [{ name: "Fries", state: "skip" }], helpful: 3 },
+      { id: 2, stars: 5, text: "Great", when: new Date(2026, 9, 25, 12, 55), full: "Oct 25, 2026, 12:55 PM",
+        dishes: [{ name: "Paneer burrito", state: "recommend" }], helpful: 5 },
+      { id: 3, stars: 4, text: "Solid. Would repeat.", when: new Date(2026, 9, 23, 19, 0), full: "Oct 23, 2026",
+        dishes: [{ name: "Chicken wrap", state: "recommend" }], helpful: 2 },
+      { id: 4, stars: 4, text: "Good, but slow service", when: new Date(2026, 9, 19, 18, 0), full: "Oct 19, 2026",
+        dishes: [], helpful: 1 },
+      { id: 5, stars: 5, text: "Paneer burrito is unreal", when: new Date(2026, 9, 17, 13, 0), full: "Oct 17, 2026",
+        dishes: [{ name: "Paneer burrito", state: "recommend" }], helpful: 4 }
+    ];
+
+    var ICONS = {
+      up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>',
+      down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zM17 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg>'
+    };
+
+    /* ---------- state ---------- */
+    var ratingF = null, dishF = null;
+    var expanded = {}, voted = {};
+    var MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+    function $(id) { return document.getElementById(id); }
+    function relDate(d) {
+      var day = function (x) { return new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime(); };
+      var diff = Math.round((day(NOW) - day(d)) / 86400000);
+      if (diff <= 0) return "Today";
+      if (diff === 1) return "Yesterday";
+      if (diff < 7) return diff + " days ago";
+      return MONTHS[d.getMonth()] + " " + d.getDate();
+    }
+    function passes(r) {
+      if (ratingF !== null && r.stars !== ratingF) return false;
+      if (dishF !== null && !r.dishes.some(function (d) { return d.name === dishF; })) return false;
+      return true;
+    }
+
+    /* ---------- 2 · bars ---------- */
+    function buildBars() {
+      var max = Math.max.apply(null, DIST.map(function (d) { return d.n; }).concat([1]));
+      $("barRows").innerHTML = DIST.map(function (d) {
+        return '<button type="button" class="bar-row" data-stars="' + d.stars + '" aria-pressed="false"' +
+          ' aria-label="Filter by ' + d.stars + ' star reviews, ' + d.n + ' review' + (d.n === 1 ? '' : 's') + '">' +
+          '<span class="bar-label">' + d.stars + '</span>' +
+          '<span class="bar-track"><span class="bar-fill" style="width:' + ((d.n / max) * 100) + '%"></span></span>' +
+          '<span class="bar-count">' + d.n + '</span></button>';
+      }).join("");
+    }
+
+    /* ---------- 3 · chips ---------- */
+    function chipHTML(d) {
+      var up = d.state === "recommend";
+      return '<button type="button" class="chip ' + d.state + '" data-dish="' + d.name + '" aria-pressed="false">' +
+        (up ? ICONS.up : ICONS.down) +
+        '<span>' + d.name + ' ' + d.n + '</span>' +
+        '<span class="sr-only">' + (up ? 'recommended' : 'skip') + '</span></button>';
+    }
+    function buildChips() { $("dishChips").innerHTML = DISHES.map(chipHTML).join(""); }
+
+    /* ---------- 4 · reviews ---------- */
+    function dishTagHTML(d) {
+      var up = d.state === "recommend";
+      return '<span class="dish-tag ' + d.state + '">' + (up ? ICONS.up : ICONS.down) +
+        '<span>' + d.name + '</span><span class="sr-only">' + (up ? 'recommended' : 'skip') + '</span></span>';
+    }
+    function cardHTML(r) {
+      var isLatest = REVIEWS[0].id === r.id;
+      var on = !!voted[r.id];
+      return '<article class="review-card" data-id="' + r.id + '">' +
+        '<div class="card-top">' +
+        '<span class="badge" aria-label="' + r.stars.toFixed(1) + ' star rating">' + r.stars.toFixed(1) + '</span>' +
+        (isLatest ? '<span class="latest-tag">Latest</span>' : '') +
+        '<span class="date" title="' + r.full + '">' + relDate(r.when) + '</span></div>' +
+        '<p class="review-text' + (expanded[r.id] ? ' expanded' : ' clamped') + '">' + r.text + '</p>' +
+        '<button type="button" class="read-more' + (expanded[r.id] ? '' : ' hidden') + '" aria-expanded="' + (expanded[r.id] ? 'true' : 'false') + '">' +
+        (expanded[r.id] ? 'Read less' : 'Read more') + '</button>' +
+        (r.dishes.length ? '<div class="dish-tags">' + r.dishes.map(dishTagHTML).join('') + '</div>' : '') +
+        '<div class="card-foot"><button type="button" class="helpful press' + (on ? ' on' : '') + '" data-helpful="' + r.id + '"' +
+        ' aria-pressed="' + (on ? 'true' : 'false') + '" aria-label="Mark this review helpful">' + ICONS.up +
+        '<span>Helpful</span><span class="hcount">' + (r.helpful + (on ? 1 : 0)) + '</span></button></div>' +
+        '</article>';
+    }
+    function renderList() {
+      var listEl = $("reviewList");
+      var update = function () {
+        if (REVIEWS.length === 0) {
+          listEl.hidden = true; $("emptyState").hidden = true; $("zeroState").hidden = false;
+          listEl.classList.remove("fading");
+          return;
+        }
+        $("zeroState").hidden = true;
+        var show = REVIEWS.filter(passes);
+        listEl.hidden = show.length === 0;
+        $("emptyState").hidden = show.length !== 0;
+        if (show.length) listEl.innerHTML = show.map(cardHTML).join("");
+        listEl.classList.remove("fading");
+        measureClamps();
+      };
+      if (REDUCED) { update(); return; }
+      listEl.classList.add("fading");
+      window.setTimeout(update, 150);
+    }
+    function measureClamps() {
+      window.requestAnimationFrame(function () {
+        var cards = $("reviewList").querySelectorAll(".review-card");
+        for (var i = 0; i < cards.length; i++) {
+          var p = cards[i].querySelector(".review-text");
+          var btn = cards[i].querySelector(".read-more");
+          if (!p || !btn) continue;
+          var overflows = !p.classList.contains("expanded") && p.scrollHeight > p.clientHeight + 2;
+          btn.classList.toggle("hidden", !overflows && !expanded[+cards[i].dataset.id]);
+        }
+      });
+    }
+
+    /* ---------- filter syncing ---------- */
+    function syncFilters() {
+      var rows = $("barRows").querySelectorAll(".bar-row");
+      for (var i = 0; i < rows.length; i++) {
+        var on = ratingF === +rows[i].dataset.stars;
+        rows[i].setAttribute("aria-pressed", on ? "true" : "false");
+        rows[i].classList.toggle("dim", ratingF !== null && !on);
+      }
+      $("clearRating").classList.toggle("hidden", ratingF === null);
+      $("barHelper").classList.toggle("hidden", ratingF !== null);
+      var chips = $("dishChips").querySelectorAll(".chip");
+      for (var j = 0; j < chips.length; j++) {
+        var cOn = dishF === chips[j].dataset.dish;
+        chips[j].setAttribute("aria-pressed", cOn ? "true" : "false");
+      }
+    }
+
+    /* ---------- events ---------- */
+    function wire() {
+      $("barRows").addEventListener("click", function (e) {
+        var b = e.target.closest(".bar-row"); if (!b) return;
+        var n = +b.dataset.stars;
+        ratingF = (ratingF === n) ? null : n;
+        syncFilters(); renderList();
+      });
+      $("clearRating").addEventListener("click", function () {
+        ratingF = null; syncFilters(); renderList();
+      });
+      $("dishChips").addEventListener("click", function (e) {
+        var c = e.target.closest(".chip"); if (!c) return;
+        dishF = (dishF === c.dataset.dish) ? null : c.dataset.dish;
+        syncFilters(); renderList();
+      });
+      $("clearAll").addEventListener("click", function () {
+        ratingF = null; dishF = null; syncFilters(); renderList();
+      });
+      $("reviewList").addEventListener("click", function (e) {
+        var h = e.target.closest(".helpful");
+        var rm = e.target.closest(".read-more");
+        if (h) {
+          var id = +h.dataset.helpful;
+          var on = !voted[id];
+          voted[id] = on;
+          h.classList.toggle("on", on);
+          h.setAttribute("aria-pressed", on ? "true" : "false");
+          var base = REVIEWS.find(function (r) { return r.id === id; }).helpful;
+          h.querySelector(".hcount").textContent = base + (on ? 1 : 0);
+        } else if (rm) {
+          var card = rm.closest(".review-card");
+          var cid = +card.dataset.id;
+          var p = card.querySelector(".review-text");
+          expanded[cid] = !expanded[cid];
+          p.classList.toggle("expanded", expanded[cid]);
+          p.classList.toggle("clamped", !expanded[cid]);
+          rm.textContent = expanded[cid] ? "Read less" : "Read more";
+          rm.setAttribute("aria-expanded", expanded[cid] ? "true" : "false");
+        }
+      });
+    }
+
+    /* ---------- skeleton state (redesign.html?skeleton=1) ---------- */
+    function renderSkeleton() {
+      var hero = '<div class="sk" style="height:150px;border-radius:0 0 16px 16px"></div>';
+      var summary =
+        '<div class="summary" style="margin-top:24px">' +
+        '<div style="flex:0 0 auto"><div class="sk" style="height:40px;width:64px"></div>' +
+        '<div class="sk" style="height:14px;width:88px;margin-top:8px"></div>' +
+        '<div class="sk" style="height:12px;width:60px;margin-top:8px"></div></div>' +
+        '<div style="flex:1">' +
+        '<div class="sk" style="height:6px;margin:14px 0"></div>' +
+        '<div class="sk" style="height:6px;margin:14px 0"></div>' +
+        '<div class="sk" style="height:6px;margin:14px 0"></div>' +
+        '<div class="sk" style="height:6px;margin:14px 0"></div>' +
+        '<div class="sk" style="height:6px;margin:14px 0"></div>' +
+        '</div></div>';
+      var heading = '<div class="sk" style="height:13px;width:210px;margin:32px 0 12px"></div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px">' +
+        '<div class="sk" style="height:32px;width:150px;border-radius:999px"></div>' +
+        '<div class="sk" style="height:32px;width:130px;border-radius:999px"></div>' +
+        '<div class="sk" style="height:32px;width:70px;border-radius:999px"></div></div>';
+      var card = function (lines) {
+        var h = '<div class="review-card" style="gap:10px">' +
+          '<div style="display:flex;gap:8px;align-items:center">' +
+          '<div class="sk" style="height:22px;width:38px;border-radius:6px"></div>' +
+          '<div class="sk" style="height:12px;width:70px;margin-left:auto"></div></div>';
+        for (var i = 0; i < lines; i++) h += '<div class="sk" style="height:12px;width:' + (i === lines - 1 ? '55' : '92') + '%"></div>';
+        h += '<div class="sk" style="height:28px;width:96px;border-radius:999px"></div></div>';
+        return h;
+      };
+      $("hero").outerHTML = hero;
+      document.querySelector("main").innerHTML =
+        summary + heading + '<div class="review-list" style="display:flex;flex-direction:column;gap:12px">' + card(2) + card(3) + card(2) + '</div>';
+    }
+
+    /* ---------- boot ---------- */
+    var q = new URLSearchParams(location.search);
+    if (q.get("skeleton") === "1") {
+      renderSkeleton();
+    } else {
+      buildBars(); buildChips(); syncFilters(); renderList(); wire();
+    }
+  </script>
+</body>
+</html>
