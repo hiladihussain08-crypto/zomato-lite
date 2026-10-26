@@ -512,7 +512,7 @@
         }
       }
       $("rateLabel").textContent = WORDS[rating];
-      $("ratingHelp").hidden = true;
+      $("ratingHelp").classList.add("hidden");
       paintCta();
       saveDraft();
     }
@@ -561,8 +561,8 @@
     }
     function updateCapacity() {
       var full = rows.length >= MAX_DISHES;
-      $("dishLimitHelper").hidden = !full;
-      $("addDishBtn").hidden = full;
+      $("dishLimitHelper").classList.toggle("hidden", !full);
+      $("addDishBtn").classList.toggle("hidden", full);
       if (full) { $("addForm").classList.add("hidden"); $("addDishBtn").setAttribute("aria-expanded", "false"); }
       renderSuggestions();
     }
@@ -572,10 +572,10 @@
       if (rows.some(function (r) { return norm(r.name) === norm(v); })) {
         var m = $("dishDupMsg");
         m.textContent = '"' + v + '" is already on your list';
-        m.hidden = false;
+        m.classList.remove("hidden");
         return;
       }
-      $("dishDupMsg").hidden = true;
+      $("dishDupMsg").classList.add("hidden");
       rows.push({ name: v, state: null });
       renderRows();
       saveDraft();
@@ -614,12 +614,12 @@
       $("dishAddGo").addEventListener("click", function () { addDish($("dishInput").value); });
       $("dishInput").addEventListener("keydown", function (e) {
         if (e.key === "Enter") { e.preventDefault(); addDish($("dishInput").value); hideAc(); }
-        if (e.key === "ArrowDown" && !$("dishAc").hidden) {
+        if (e.key === "ArrowDown" && !$("dishAc").classList.contains("hidden")) {
           var first = $("dishAc").querySelector(".ac-opt");
           if (first) { e.preventDefault(); first.focus(); }
         }
       });
-      $("dishInput").addEventListener("input", function () { renderAc(); $("dishDupMsg").hidden = true; });
+      $("dishInput").addEventListener("input", function () { renderAc(); $("dishDupMsg").classList.add("hidden"); });
       $("dishInput").addEventListener("blur", function () { window.setTimeout(hideAc, 130); });
       $("dishAc").addEventListener("keydown", function (e) {
         var opts = Array.prototype.slice.call($("dishAc").querySelectorAll(".ac-opt"));
@@ -733,7 +733,7 @@
     function submit() {
       if (posting) return;
       if (!rating) {
-        $("ratingHelp").hidden = false;
+        $("ratingHelp").classList.remove("hidden");
         var b = $("submitBtn");
         b.classList.add("shake");
         window.setTimeout(function () { b.classList.remove("shake"); }, 260);
@@ -744,13 +744,13 @@
       var btn = $("submitBtn");
       btn.classList.add("posting");
       btn.setAttribute("aria-busy", "true");
-      $("ratingHelp").hidden = true;
-      $("postError").hidden = true;
+      $("ratingHelp").classList.add("hidden");
+      $("postError").classList.add("hidden");
       $("ctaLabel").innerHTML = '<span class="spin" aria-hidden="true"></span>Posting…';
       window.setTimeout(function () {
         if (FAIL) {
           restoreCta();
-          $("postError").hidden = false;
+          $("postError").classList.remove("hidden");
           return;
         }
         var chosen = rows.filter(function (r) { return r.state; }).map(function (r) {

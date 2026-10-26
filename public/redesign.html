@@ -503,14 +503,14 @@
       var listEl = $("reviewList");
       var update = function () {
         if (REVIEWS.length === 0) {
-          listEl.hidden = true; $("emptyState").hidden = true; $("zeroState").hidden = false;
+          listEl.classList.add("hidden"); $("emptyState").classList.remove("hidden"); $("zeroState").classList.remove("hidden");
           listEl.classList.remove("fading");
           return;
         }
-        $("zeroState").hidden = true;
+        $("zeroState").classList.add("hidden");
         var show = REVIEWS.filter(passes);
-        listEl.hidden = show.length === 0;
-        $("emptyState").hidden = show.length !== 0;
+        listEl.classList.toggle("hidden", show.length === 0);
+        $("emptyState").classList.toggle("hidden", show.length !== 0);
         if (show.length) listEl.innerHTML = show.map(cardHTML).join("");
         listEl.classList.remove("fading");
         measureClamps();
