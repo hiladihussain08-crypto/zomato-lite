@@ -21,16 +21,19 @@ function statements(file) {
     .filter(Boolean);
 }
 
-// Reset, rebuild, reseed. Order matters: reviews reference restaurants,
-// so reviews must go first, or Postgres refuses (nothing may point at a table being destroyed).
+// Reset, rebuild, reseed. Order matters: every foreign key must lose its
+// dependents first, so the dishes/votes tables go before reviews, and reviews
+// before restaurants - Postgres refuses to drop a table that is being pointed at.
+await sql.query("DROP TABLE IF EXISTS helpful_votes");
+await sql.query("DROP TABLE IF EXISTS review_dishes");
 await sql.query("DROP TABLE IF EXISTS reviews");
 await sql.query("DROP TABLE IF EXISTS restaurants");
 
 for (const statement of statements("schema.sql")) await sql.query(statement);
-console.log("schema applied - restaurants + reviews exist");
+console.log("schema applied - restaurants + reviews + review_dishes + helpful_votes exist");
 
 for (const statement of statements("seed.sql")) await sql.query(statement);
-console.log("seed applied - Ludhiana Burrito + 3 reviews");
+console.log("seed applied - Ludhiana Burrito + 3 reviews + 3 dish facts");
 
 const restaurants = await sql.query("SELECT id, name, cuisine, area FROM restaurants");
 const reviews = await sql.query(

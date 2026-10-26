@@ -1,12 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // prototypes live flat in /public; allow the briefed bare routes to reach them
-  // (temporary until the real /write route is promoted to the app)
+  // The redesign is the app now: the briefed addresses land on the real,
+  // DB-backed pages. The prototypes stay in /public as archive files
+  // (write.html, redesign.html) reachable by their .html paths only.
   async redirects() {
     return [
-      { source: "/write", destination: "/write.html", permanent: false },
-      { source: "/redesign", destination: "/redesign.html", permanent: false }
+      { source: "/write", destination: "/review/1", permanent: false },
+      { source: "/redesign", destination: "/restaurant/1", permanent: false }
     ];
   }
 };
