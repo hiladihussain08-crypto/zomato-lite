@@ -458,7 +458,7 @@ export default function ReviewPage({ params }: { params: Promise<{ restaurantId:
         </section>
 
         {/* dishes */}
-        <section className="mt-7" aria-labelledby="dishHeading">
+        <section className="mt-7" aria-labelledby="dishHeading" id="dishSection">
           <h2 id="dishHeading" className="m-0 text-[13px] font-semibold">
             What did you try?
             <span className="ml-1.5 text-[11px] font-semibold text-[var(--muted)]">Optional</span>
@@ -631,7 +631,7 @@ export default function ReviewPage({ params }: { params: Promise<{ restaurantId:
         </section>
 
         {/* quick-start chips */}
-        <section className="mt-7" aria-labelledby="starterTitle">
+        <section className="mt-7" aria-labelledby="starterTitle" id="starterSection">
           <p id="starterTitle" className="m-0 text-[12px] text-[var(--secondary)]">
             Tap to start your review
           </p>
