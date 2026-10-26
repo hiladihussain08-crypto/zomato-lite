@@ -24,6 +24,26 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const action = new URL(request.url).searchParams.get("action");
+
+  // action=purge: maintenance-only removal of ONE exact review row by id (its
+  // dish marks and helpful votes follow via ON DELETE CASCADE). Exists so the
+  // stage-2 write tests can leave zero trace in production data. Deleted with
+  // this endpoint at final cleanup - never a user-facing feature.
+  if (action === "purge") {
+    const reviewId = Number(new URL(request.url).searchParams.get("reviewId"));
+    if (!Number.isInteger(reviewId) || reviewId <= 0) {
+      return NextResponse.json({ error: "reviewId must be a whole number" }, { status: 400 });
+    }
+    const removed = await q("DELETE FROM reviews WHERE id = $1 RETURNING id", [reviewId]);
+    return NextResponse.json({
+      ok: true,
+      action: "purge",
+      removed: removed.length > 0,
+      reviewId,
+    });
+  }
+
   const applied: string[] = [];
 
   // review_dishes: one row per (review, dish, verdict). Counts are computed by

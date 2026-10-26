@@ -2,16 +2,22 @@ import { NextResponse } from "next/server";
 import { q } from "@/lib/db";
 
 // GET = "give me something." Reads only. Changes nothing in the database.
-// Response shape mirrors the screen: name, big average, latest review, older list.
-// Everything computed here is computed fresh, every request - never stored.
+// Response shape mirrors the screen: name, big average, latest review, older list,
+// plus the redesign's additions: dish verdict counts and per-review dish marks /
+// helpful totals. Everything computed here is computed fresh, every request -
+// never stored.
 
-function toReview(row: Record<string, unknown>) {
+type DishMark = { name: string; state: string };
+
+function toReview(row: Record<string, unknown>, dishes: DishMark[] = [], helpfulCount = 0) {
   const parsed = new Date(row.created_at as string);
   return {
     id: row.id,
     rating: row.rating,
     comment: row.comment,
     createdAt: Number.isNaN(parsed.getTime()) ? String(row.created_at) : parsed.toISOString(),
+    dishes,
+    helpfulCount,
   };
 }
 
@@ -63,13 +69,75 @@ export async function GET(
         )
       : [];
 
+  // Dish verdict totals, straight from SQL. The sum stays in the database's hands;
+  // the API only carries the answer upward. Ordered by mentions so the write page
+  // can read its autocomplete suggestions from the same list.
+  const dishRows = await q(
+    `SELECT d.name,
+            sum(CASE WHEN d.state = 'recommend' THEN 1 ELSE 0 END)::int AS recommend_count,
+            sum(CASE WHEN d.state = 'skip' THEN 1 ELSE 0 END)::int AS skip_count
+     FROM review_dishes d
+     JOIN reviews r ON r.id = d.review_id
+     WHERE r.restaurant_id = $1
+     GROUP BY d.name
+     ORDER BY count(*) DESC, d.name`,
+    [restaurantId]
+  );
+  const dishes = dishRows.map((r) => ({
+    name: String(r.name),
+    recommendCount: Number(r.recommend_count),
+    skipCount: Number(r.skip_count),
+  }));
+
+  // Per-review dish marks, grouped in memory by review id.
+  const markRows = await q(
+    `SELECT d.review_id, d.name, d.state
+     FROM review_dishes d
+     JOIN reviews r ON r.id = d.review_id
+     WHERE r.restaurant_id = $1`,
+    [restaurantId]
+  );
+  const marks = new Map<number, DishMark[]>();
+  for (const m of markRows) {
+    const key = Number(m.review_id);
+    const list = marks.get(key) ?? [];
+    list.push({ name: String(m.name), state: String(m.state) });
+    marks.set(key, list);
+  }
+
+  // Helpful vote totals per review, again computed by COUNT in SQL.
+  const helpfulRows = await q(
+    `SELECT hv.review_id, count(*)::int AS n
+     FROM helpful_votes hv
+     JOIN reviews r ON r.id = hv.review_id
+     WHERE r.restaurant_id = $1
+     GROUP BY hv.review_id`,
+    [restaurantId]
+  );
+  const helpfulBy = new Map<number, number>();
+  for (const h of helpfulRows) helpfulBy.set(Number(h.review_id), Number(h.n));
+
   return NextResponse.json({
     name: restaurant.name,
     cuisine: restaurant.cuisine,
     area: restaurant.area,
     averageRating,
     totalReviews,
-    latestReview: latestRows.length > 0 ? toReview(latestRows[0]) : null,
-    reviews: olderRows.map(toReview),
+    latestReview:
+      latestRows.length > 0
+        ? toReview(
+            latestRows[0],
+            marks.get(Number(latestRows[0].id)) ?? [],
+            helpfulBy.get(Number(latestRows[0].id)) ?? 0
+          )
+        : null,
+    reviews: olderRows.map((row) =>
+      toReview(
+        row,
+        marks.get(Number(row.id)) ?? [],
+        helpfulBy.get(Number(row.id)) ?? 0
+      )
+    ),
+    dishes,
   });
 }
