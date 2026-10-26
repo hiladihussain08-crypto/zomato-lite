@@ -123,6 +123,7 @@ export default function ReviewPage({ params }: { params: Promise<{ restaurantId:
   const [shake, setShake] = useState(false);
 
   const [dlgOpen, setDlgOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
 
   const backRef = useRef<HTMLButtonElement>(null);
   const keepRef = useRef<HTMLButtonElement>(null);
@@ -229,6 +230,15 @@ export default function ReviewPage({ params }: { params: Promise<{ restaurantId:
       vv.removeEventListener("resize", fit);
       vv.removeEventListener("scroll", fit);
     };
+  }, []);
+
+  // The sticky top bar shows its hairline only once the page has actually
+  // scrolled away from the top - no border while the header sits at rest.
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 4);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   // ---------- stars ----------
@@ -416,29 +426,36 @@ export default function ReviewPage({ params }: { params: Promise<{ restaurantId:
 
   return (
     <div className="mx-auto max-w-[480px]">
-      {/* top bar */}
-      <header className="px-4 pt-4 text-[var(--text)]">
-        <div className="flex items-center gap-2.5">
+      {/* top bar: back arrow + restaurant identity. Sticky, page colour, and
+          its hairline only appears once the page scrolls (see scrolled state),
+          so the name stays readable over the content beneath it. */}
+      <header
+        className={`sticky top-0 z-20 bg-[var(--bg)] px-4 pb-2.5 pt-2 text-[var(--text)] border-b ${
+          scrolled ? "border-[var(--border)]" : "border-transparent"
+        }`}
+      >
+        <div className="flex min-w-0 items-center gap-1">
           <button
             ref={backRef}
             type="button"
             aria-label="Back to reviews"
-            className="-ml-2 flex h-11 w-11 items-center justify-center rounded-xl hover:bg-[var(--skip-bg)]"
+            className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl hover:bg-[var(--skip-bg)]"
             onClick={goBack}
           >
             <BackIcon />
           </button>
-          <span className="text-[11px] font-semibold uppercase tracking-[0.18em]">
-            <span className="text-[var(--brand)]">Zomato</span>
-            <span>-Lite</span>
-          </span>
+          <div className="min-w-0 flex-1">
+            <p className="m-0 truncate text-[16px] font-semibold leading-[1.35]">
+              {restaurant ? restaurant.name : "Loading…"}
+            </p>
+            {restaurant && (
+              <p className="m-0 truncate text-[12px] leading-[1.35] text-[var(--secondary)]">
+                {restaurant.cuisine} · {restaurant.area}
+              </p>
+            )}
+          </div>
         </div>
-        <h1 className="mt-2.5 text-2xl font-semibold leading-tight">{restaurant ? restaurant.name : "Loading…"}</h1>
-        {restaurant && (
-          <p className="m-0 mt-0.5 text-[13px] text-[var(--secondary)]">
-            {restaurant.cuisine} · {restaurant.area}
-          </p>
-        )}
+        <h1 className="mt-3 text-2xl font-semibold leading-tight">Write a review</h1>
       </header>
 
       <main className="bg-[var(--bg)] px-4 pb-28 pt-2 text-[var(--text)]">
