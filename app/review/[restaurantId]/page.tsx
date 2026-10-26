@@ -248,8 +248,8 @@ export default function ReviewPage({ params }: { params: Promise<{ restaurantId:
   function starKeys(e: React.KeyboardEvent<HTMLDivElement>) {
     const cur = rating === 0 ? -1 : rating;
     let next: number | null = null;
-    if (e.key === "ArrowLeft" || e.key === "ArrowUp") next = Math.max(1, (cur === -1 ? 1 : cur) - 1);
-    else if (e.key === "ArrowRight" || e.key === "ArrowDown") next = Math.min(5, (cur === -1 ? 1 : cur) + 1);
+    if (e.key === "ArrowLeft" || e.key === "ArrowUp") next = Math.max(1, (cur === -1 ? 2 : cur) - 1);
+    else if (e.key === "ArrowRight" || e.key === "ArrowDown") next = Math.min(5, (cur === -1 ? 0 : cur) + 1);
     else if (e.key === "Home") next = 1;
     else if (e.key === "End") next = 5;
     if (next === null) return;
@@ -437,6 +437,9 @@ export default function ReviewPage({ params }: { params: Promise<{ restaurantId:
                 aria-checked={n <= rating}
                 data-stars={n}
                 aria-label={`${n} star${n === 1 ? "" : "s"}, ${WORDS[n]}`}
+                // roving tabindex: with no rating every star is tabbable; once a
+                // star is chosen only it stays in the tab order (arrow keys walk)
+                tabIndex={rating === 0 ? 0 : n === rating ? 0 : -1}
                 onClick={() => selectStar(n, true)}
                 className={`star-btn flex h-11 w-11 items-center justify-center rounded-[10px] p-0 transition-colors hover:-translate-y-0.5 ${
                   n <= rating ? "text-[var(--star)]" : "text-[var(--star-off)]"
