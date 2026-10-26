@@ -4,7 +4,9 @@
   - Self-contained HTML/CSS/JS, no dependencies, no build step.
   - Sample data as briefed; helpful counts are local and optimistic (no backend).
   - Relative dates are anchored to Oct 26 2026 so the sample reads exactly as spec'd.
-  - Static data + a /write placeholder route, per brief. The live product page is untouched.
+  - Static data + a /write.html placeholder prototype, per brief. The live product page is untouched.
+  - Reads reviews posted from write.html (localStorage "zl_reviews"), merges them on top,
+    moves the summary numbers accordingly, and toasts "Thanks, your review is live" on return.
   - Contrast flags (see delivery notes): white on #E23744 ≈ 4.3:1 (AA large ✓, normal text ✗),
     white on #CB2F3B ≈ 5.2:1 ✓; green chip #1A7F4B/#E6F4EC ≈ 4.4:1.
 -->
@@ -240,6 +242,21 @@
     }
     .empty p { margin: 0; color: var(--secondary); }
 
+    /* ---------- toast (after a successful post) ---------- */
+    .toast {
+      position: fixed; top: 14px; left: 16px; right: 16px;
+      max-width: 448px; margin-inline: auto;
+      display: flex; align-items: center; gap: 8px;
+      background: var(--rec-bg); color: var(--rec-text);
+      padding: 10px 14px; border-radius: 999px;
+      font-size: 13px; font-weight: 600;
+      opacity: 0; transform: translateY(-8px);
+      transition: opacity 150ms ease, transform 150ms ease;
+      z-index: 20; pointer-events: none;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast svg { width: 15px; height: 15px; flex: 0 0 auto; }
+
     /* ---------- 5. sticky bar ---------- */
     .sticky-bar {
       position: fixed;
@@ -284,15 +301,21 @@
       </div>
     </header>
 
+    <!-- toast, shown when returning from a successful post -->
+    <div class="toast" id="toast" role="status" aria-live="polite">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+      <span>Thanks, your review is live</span>
+    </div>
+
     <main>
       <!-- 2 · rating summary -->
       <section class="summary" aria-label="Rating summary">
         <div class="summary-left">
-          <p class="rating-num">3.7</p>
-          <p class="stars" aria-label="3.7 out of 5 stars">
+          <p class="rating-num" id="ratingNum">3.7</p>
+          <p class="stars" id="starRow" aria-label="3.7 out of 5 stars">
             <span class="s-on">★</span><span class="s-on">★</span><span class="s-on">★</span><span class="s-off">☆</span><span class="s-off">☆</span>
           </p>
-          <p class="review-count">9 reviews</p>
+          <p class="review-count" id="reviewCount">9 reviews</p>
         </div>
         <div class="summary-bars" role="group" aria-label="Filter reviews by rating">
           <div id="barRows"></div>
@@ -324,7 +347,7 @@
 
     <!-- 5 · sticky action bar -->
     <footer class="sticky-bar" id="stickyBar">
-      <a class="cta" href="/write">
+      <a class="cta" href="/write.html">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
         Write a review
       </a>
@@ -337,15 +360,12 @@
 
     /* ---------- sample data (as briefed; relative dates anchored to Oct 26 2026) ---------- */
     var NOW = new Date(2026, 9, 26);
-    var DIST = [
-      { stars: 5, n: 4 }, { stars: 4, n: 3 }, { stars: 3, n: 1 }, { stars: 2, n: 0 }, { stars: 1, n: 1 }
-    ];
     var DISHES = [
       { name: "Paneer burrito", state: "recommend", n: 6 },
       { name: "Chicken wrap", state: "recommend", n: 3 },
       { name: "Fries", state: "skip", n: 2 }
     ];
-    var REVIEWS = [
+    var SAMPLE = [
       { id: 1, stars: 3, text: "Great", when: new Date(2026, 9, 25, 14, 37), full: "Oct 25, 2026, 2:37 PM",
         dishes: [{ name: "Fries", state: "skip" }], helpful: 3 },
       { id: 2, stars: 5, text: "Great", when: new Date(2026, 9, 25, 12, 55), full: "Oct 25, 2026, 12:55 PM",
@@ -357,6 +377,43 @@
       { id: 5, stars: 5, text: "Paneer burrito is unreal", when: new Date(2026, 9, 17, 13, 0), full: "Oct 17, 2026",
         dishes: [{ name: "Paneer burrito", state: "recommend" }], helpful: 4 }
     ];
+
+    /* Summary of the FULL review universe: 9 reviews as briefed (only 5 are listed above).
+       Reviews posted from write.html (localStorage "zl_reviews") merge in and move the numbers. */
+    var SUMMARY = { count: 9, avg: 3.7, dist: [4, 3, 1, 0, 1] };
+
+    function readStored() {
+      var out = [];
+      try {
+        var raw = JSON.parse(localStorage.getItem("zl_reviews") || "[]");
+        if (Array.isArray(raw)) {
+          out = raw.filter(function (x) { return x && +x.stars >= 1 && +x.stars <= 5; }).map(function (x, i) {
+            var when = new Date(x.when || Date.now());
+            return {
+              id: x.id || ("u" + when.getTime() + "-" + i),
+              stars: Math.min(5, Math.max(1, Math.round(+x.stars))),
+              text: String(x.text || ""),
+              when: when,
+              full: x.full || "",
+              dishes: (x.dishes || []).filter(function (d) { return d && d.name; }).map(function (d) {
+                return { name: String(d.name), state: d.state === "skip" ? "skip" : "recommend" };
+              }),
+              helpful: 0
+            };
+          });
+          SUMMARY.count += out.length;
+          if (out.length) {
+            var sumNew = 0;
+            out.forEach(function (r) { sumNew += r.stars; SUMMARY.dist[5 - r.stars] += 1; });
+            SUMMARY.avg = (SUMMARY.avg * (SUMMARY.count - out.length) + sumNew) / SUMMARY.count;
+          }
+        }
+      } catch (e) { /* broken storage: demo continues on sample data */ }
+      return out;
+    }
+
+    var REVIEWS = readStored().concat(SAMPLE).sort(function (a, b) { return b.when - a.when; });
+    var DIST = [5, 4, 3, 2, 1].map(function (n, i) { return { stars: n, n: SUMMARY.dist[i] }; });
 
     var ICONS = {
       up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>',
@@ -381,6 +438,20 @@
       if (ratingF !== null && r.stars !== ratingF) return false;
       if (dishF !== null && !r.dishes.some(function (d) { return d.name === dishF; })) return false;
       return true;
+    }
+
+    /* ---------- 2 · summary paint (moves with merged reviews) ---------- */
+    function paintSummary() {
+      $("ratingNum").textContent = SUMMARY.avg.toFixed(1);
+      var on = Math.floor(SUMMARY.avg);
+      var s = "";
+      for (var i = 1; i <= 5; i++) {
+        s += '<span class="' + (i <= on ? "s-on" : "s-off") + '">' + (i <= on ? "★" : "☆") + "</span>";
+      }
+      var st = $("starRow");
+      st.innerHTML = s;
+      st.setAttribute("aria-label", SUMMARY.avg.toFixed(1) + " out of 5 stars");
+      $("reviewCount").textContent = SUMMARY.count + " reviews";
     }
 
     /* ---------- 2 · bars ---------- */
@@ -456,7 +527,7 @@
           var btn = cards[i].querySelector(".read-more");
           if (!p || !btn) continue;
           var overflows = !p.classList.contains("expanded") && p.scrollHeight > p.clientHeight + 2;
-          btn.classList.toggle("hidden", !overflows && !expanded[+cards[i].dataset.id]);
+          btn.classList.toggle("hidden", !overflows && !expanded[cards[i].dataset.id]);
         }
       });
     }
@@ -501,7 +572,7 @@
         var h = e.target.closest(".helpful");
         var rm = e.target.closest(".read-more");
         if (h) {
-          var id = +h.dataset.helpful;
+          var id = h.dataset.helpful;
           var on = !voted[id];
           voted[id] = on;
           h.classList.toggle("on", on);
@@ -510,7 +581,7 @@
           h.querySelector(".hcount").textContent = base + (on ? 1 : 0);
         } else if (rm) {
           var card = rm.closest(".review-card");
-          var cid = +card.dataset.id;
+          var cid = card.dataset.id;
           var p = card.querySelector(".review-text");
           expanded[cid] = !expanded[cid];
           p.classList.toggle("expanded", expanded[cid]);
@@ -560,7 +631,13 @@
     if (q.get("skeleton") === "1") {
       renderSkeleton();
     } else {
-      buildBars(); buildChips(); syncFilters(); renderList(); wire();
+      paintSummary(); buildBars(); buildChips(); syncFilters(); renderList(); wire();
+      if (sessionStorage.getItem("zl_toast")) {
+        sessionStorage.removeItem("zl_toast");
+        var toast = $("toast");
+        window.requestAnimationFrame(function () { toast.classList.add("show"); });
+        window.setTimeout(function () { toast.classList.remove("show"); }, 2600);
+      }
     }
   </script>
 </body>

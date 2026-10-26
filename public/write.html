@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<!--
+  Zomato-Lite · Write-a-review page (prototype)
+  - Pairs with redesign.html: same tokens, fonts, spacing, chip language and sticky-bar pattern
+    (bar sits on the page colour, not a card-coloured block, per the reviews-page fix).
+  - Anonymous by design: only stars (required), text (optional), dishes each recommend/skip (optional).
+  - Submit is simulated (600ms): the review is stored in localStorage "zl_reviews" and merges into
+    the reviews prototype. ?fail=1 (or console toggle window.__zlForceFail = true) simulates a failure.
+  - Draft survives reloads via sessionStorage "zl_draft"; cleared on success or discard.
+  - Contrast flags inherited from the reviews page: white on #E23744 ≈ 4.3:1, green chip ≈ 4.4:1.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#FAF9F6" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)">
+  <title>Write a review · Ludhiana Burrito — Zomato-Lite</title>
+  <style>
+    /* ---------- tokens (light) — shared with redesign.html ---------- */
+    :root {
+      --brand: #E23744;
+      --brand-hover: #CB2F3B;
+      --bg: #FAF9F6;
+      --card: #FFFFFF;
+      --border: #ECE9E4;
+      --text: #1C1C1C;
+      --secondary: #6B6B6B;
+      --muted: #A3A3A3;
+      --star: #E07B00;
+      --star-off: #D9D6D0;
+      --rec-bg: #E6F4EC;
+      --rec-text: #1A7F4B;
+      --skip-bg: #F1F0ED;
+      --skip-text: #6B6B6B;
+      --skip-on-border: #6B6B6B;
+      --cta-off-bg: #E8E6E1;
+      --cta-off-hover: #E1DED7;
+      --cta-off-text: #6B6B6B;
+      --scrim: rgba(0, 0, 0, .4);
+      --on-brand: #FFFFFF;
+    }
+    /* ---------- tokens (dark) ---------- */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #121212;
+        --card: #1B1B1B;
+        --border: #2C2C2C;
+        --text: #F4F4F3;
+        --secondary: #ABABA8;
+        --muted: #6E6E6B;
+        --star-off: #4A4741;
+        --rec-bg: #132F20;
+        --rec-text: #7BD8A3;
+        --skip-bg: #242423;
+        --skip-text: #ABABA8;
+        --skip-on-border: #8A8A86;
+        --cta-off-bg: #2A2A28;
+        --cta-off-hover: #333331;
+        --cta-off-text: #ABABA8;
+        --scrim: rgba(0, 0, 0, .55);
+      }
+    }
+
+    * { box-sizing: border-box; }
+    html { color-scheme: light dark; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.45;
+      -webkit-font-smoothing: antialiased;
+    }
+    .page { max-width: 480px; margin: 0 auto; }
+
+    /* ---------- focus & motion ---------- */
+    :focus { outline: none; }
+    :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+    button { font: inherit; color: inherit; cursor: pointer; }
+    button, input, textarea { -webkit-tap-highlight-color: transparent; }
+    .press { transition: transform 150ms ease; }
+    .press:active { transform: scale(0.97); }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        transition-duration: .01ms !important;
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+      }
+    }
+
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+    }
+    .hidden { display: none !important; }
+    .linklike {
+      background: none; border: 0; padding: 0;
+      color: var(--brand); font-size: 13px; font-weight: 600;
+      text-decoration: underline; text-underline-offset: 2px;
+      position: relative; display: inline-flex; align-items: center; gap: 4px;
+      min-height: 44px;
+    }
+    .linklike::after { content: ""; position: absolute; inset: -7px -6px; }
+    .linklike[aria-disabled="true"] { color: var(--muted); cursor: default; }
+
+    /* ---------- 1 · top bar ---------- */
+    .top { padding: 16px 16px 0; }
+    .top-bar { display: flex; align-items: center; gap: 10px; }
+    .back-btn {
+      display: flex; align-items: center; justify-content: center;
+      width: 44px; height: 44px;
+      margin-left: -8px;
+      background: none; border: 0; border-radius: 12px;
+      color: var(--text);
+      position: relative;
+    }
+    .back-btn::after { content: ""; position: absolute; inset: -6px; }
+    .back-btn:hover { background: var(--skip-bg); }
+    .back-btn svg { width: 22px; height: 22px; }
+    .wordmark { font-size: 11px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; }
+    .wordmark .wm-red { color: var(--brand); }
+    .wordmark .wm-dark { color: var(--text); }
+    .rname { margin: 10px 0 0; font-size: 24px; font-weight: 600; line-height: 1.2; }
+    .rmeta { margin: 2px 0 0; font-size: 13px; color: var(--secondary); }
+
+    main { padding: 8px 16px 112px; }
+
+    /* ---------- 2 · rating ---------- */
+    .rate { padding: 20px 0 4px; text-align: center; }
+    .rate-title { margin: 0; font-size: 13px; color: var(--secondary); }
+    .stars-row { display: flex; justify-content: center; gap: 8px; margin-top: 6px; }
+    .star-btn {
+      display: flex; align-items: center; justify-content: center;
+      width: 44px; height: 44px;
+      padding: 0; border: 0; border-radius: 10px;
+      background: none;
+      color: var(--star-off);
+      transition: color 120ms ease, transform 120ms ease;
+    }
+    .star-btn svg { width: 40px; height: 40px; display: block; }
+    .star-btn.on { color: var(--star); }
+    .star-btn:hover { transform: translateY(-2px); }
+    .pop { animation: popIn 120ms ease; }
+    @keyframes popIn { 0% { transform: scale(1); } 45% { transform: scale(1.14); } 100% { transform: scale(1); } }
+    .rate-label { margin: 6px 0 0; min-height: 20px; font-size: 13px; font-weight: 600; color: var(--brand); }
+
+    /* ---------- headings & helpers ---------- */
+    .section-heading { margin: 0; font-size: 13px; font-weight: 600; color: var(--text); }
+    .opt { margin-left: 6px; font-size: 11px; font-weight: 600; color: var(--muted); }
+    .helper { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+
+    section + section { margin-top: 28px; }
+
+    /* ---------- 3 · dish rows ---------- */
+    .dish-rows { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .dish-row {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 8px 12px;
+    }
+    .drow-name { flex: 1 1 auto; font-size: 15px; font-weight: 500; }
+    .drow-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+    .tgl {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 11px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 12px; font-weight: 600; color: var(--secondary);
+      position: relative;
+      transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+    }
+    .tgl::after { content: ""; position: absolute; inset: -7px; }
+    .tgl svg { width: 13px; height: 13px; flex: 0 0 auto; }
+    .tgl:hover { border-color: var(--secondary); }
+    .tgl[aria-pressed="true"].t-rec { background: var(--rec-bg); color: var(--rec-text); border-color: transparent; }
+    .tgl[aria-pressed="true"].t-skip { background: var(--skip-bg); color: var(--text); border-color: var(--skip-on-border); }
+    .row-x {
+      flex: 0 0 auto;
+      display: flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px;
+      padding: 0; border: 0; border-radius: 8px;
+      background: none; color: var(--muted);
+      position: relative;
+    }
+    .row-x::after { content: ""; position: absolute; inset: -8px; }
+    .row-x svg { width: 15px; height: 15px; }
+    .row-x:hover { color: var(--text); }
+
+    /* ---------- suggestion chips + add form ---------- */
+    .sug-row { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+    .s-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      min-height: 36px;
+      padding: 5px 13px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 13px; font-weight: 600; color: var(--secondary);
+      position: relative;
+      transition: opacity 150ms ease;
+    }
+    .s-chip::after { content: ""; position: absolute; inset: -6px; }
+    .s-chip svg { width: 13px; height: 13px; color: var(--muted); }
+    .s-chip:hover { border-color: var(--secondary); color: var(--text); }
+    .s-chip[aria-disabled="true"] { opacity: .45; color: var(--muted); cursor: default; }
+    .add-line { margin-top: 10px; }
+    .add-form { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+    .add-row { display: flex; gap: 8px; }
+    .add-input {
+      flex: 1 1 auto;
+      min-height: 44px;
+      padding: 10px 12px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      font: inherit; font-size: 15px;
+    }
+    .add-input::placeholder { color: var(--muted); }
+    .add-go {
+      flex: 0 0 auto; min-height: 44px;
+      padding: 10px 16px;
+      background: var(--brand); color: var(--on-brand);
+      border: 0; border-radius: 12px;
+      font-size: 13px; font-weight: 600;
+      transition: background-color 150ms ease;
+    }
+    .add-go:hover { background: var(--brand-hover); }
+    .ac-list {
+      display: flex; flex-direction: column;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .ac-opt {
+      display: flex; align-items: center; gap: 6px;
+      min-height: 44px;
+      padding: 10px 12px;
+      background: none; border: 0; border-radius: 0;
+      font-size: 14px; text-align: left;
+    }
+    .ac-opt + .ac-opt { border-top: 1px solid var(--border); }
+    .ac-opt:hover { background: var(--skip-bg); }
+    .ac-opt svg { width: 14px; height: 14px; color: var(--muted); flex: 0 0 auto; }
+    .dup-msg { font-size: 12px; color: var(--secondary); }
+
+    /* ---------- 4 · quick-start chips ---------- */
+    .starters-title { margin: 0; font-size: 12px; color: var(--secondary); }
+    .starter-row { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+    .s-chip[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: transparent; }
+    .s-chip[aria-pressed="true"] svg { color: inherit; }
+
+    /* ---------- 5 · textarea + counter ---------- */
+    .ta {
+      width: 100%;
+      min-height: 110px;
+      margin-top: 12px;
+      padding: 12px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      font: inherit; font-size: 15px; line-height: 1.5;
+      resize: vertical;
+      display: block;
+    }
+    .ta::placeholder { color: var(--muted); }
+    .ta:focus-visible { outline-width: 2px; }
+    .counter { margin: 6px 2px 0; text-align: right; font-size: 12px; color: var(--muted); transition: color 150ms ease; }
+    .counter.warn { color: var(--brand); font-weight: 600; }
+
+    /* ---------- 6 · sticky submit bar ---------- */
+    .sticky-bar {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      margin-inline: auto;
+      max-width: 480px;
+      /* same treatment as the reviews page: page colour, not a card block */
+      background: var(--bg);
+      border-top: 1px solid var(--border);
+      padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+      z-index: 10;
+    }
+    .bar-note { margin: 2px 2px 8px; font-size: 12px; color: var(--secondary); display: flex; align-items: center; gap: 6px; }
+    .bar-note svg { width: 14px; height: 14px; flex: 0 0 auto; }
+    .cta {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      width: 100%; height: 48px;
+      background: var(--brand); color: var(--on-brand);
+      border: 0; border-radius: 12px;
+      font-size: 16px; font-weight: 600;
+      transition: background-color 150ms ease, color 150ms ease;
+    }
+    .cta:hover { background: var(--brand-hover); }
+    .cta:active { transform: scale(0.99); }
+    .cta.btn-off { background: var(--cta-off-bg); color: var(--cta-off-text); }
+    .cta.btn-off:hover { background: var(--cta-off-hover); }
+    .cta.posting { pointer-events: none; opacity: .85; }
+    .shake { animation: shakeX 220ms ease; }
+    @keyframes shakeX { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-3px); } 50% { transform: translateX(3px); } 75% { transform: translateX(-2px); } }
+    .spin {
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,.4);
+      border-top-color: #FFFFFF;
+      border-radius: 50%;
+      display: inline-block;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(1turn); } }
+
+    /* ---------- discard dialog ---------- */
+    .scrim {
+      position: fixed; inset: 0;
+      background: var(--scrim);
+      display: flex; align-items: center; justify-content: center;
+      padding: 16px;
+      z-index: 30;
+    }
+    .dialog {
+      width: min(340px, 100%);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .dlg-title { margin: 0; font-size: 16px; font-weight: 600; }
+    .dlg-actions { display: flex; align-items: center; gap: 12px; }
+    .btn-sec {
+      min-height: 44px;
+      padding: 10px 16px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 14px; font-weight: 600; color: var(--text);
+      transition: border-color 150ms ease;
+    }
+    .btn-sec:hover { border-color: var(--secondary); }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <!-- 1 · top bar -->
+    <header class="top">
+      <div class="top-bar">
+        <button class="back-btn" id="backBtn" type="button" aria-label="Back to reviews">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        </button>
+        <span class="wordmark"><span class="wm-red">Zomato</span><span class="wm-dark">-Lite</span></span>
+      </div>
+      <h1 class="rname">Ludhiana Burrito</h1>
+      <p class="rmeta">Indian · Sector 32</p>
+    </header>
+
+    <main>
+      <!-- 2 · rating -->
+      <section class="rate" id="rateSec" aria-labelledby="rateTitle">
+        <p class="rate-title" id="rateTitle">How was it?</p>
+        <div class="stars-row" role="radiogroup" aria-label="Rating" id="starGroup">
+          <button type="button" class="star-btn" role="radio" aria-checked="false" data-stars="1" aria-label="1 star, Poor"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></button>
+          <button type="button" class="star-btn" role="radio" aria-checked="false" data-stars="2" aria-label="2 stars, Okay"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></button>
+          <button type="button" class="star-btn" role="radio" aria-checked="false" data-stars="3" aria-label="3 stars, Good"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></button>
+          <button type="button" class="star-btn" role="radio" aria-checked="false" data-stars="4" aria-label="4 stars, Great"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></button>
+          <button type="button" class="star-btn" role="radio" aria-checked="false" data-stars="5" aria-label="5 stars, Loved it"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></button>
+        </div>
+        <p class="rate-label" id="rateLabel" aria-live="polite">&nbsp;</p>
+      </section>
+
+      <!-- 3 · dishes -->
+      <section aria-labelledby="dishHeading">
+        <h2 class="section-heading" id="dishHeading">What did you try?<span class="opt">Optional</span></h2>
+        <div class="dish-rows" id="dishRows"></div>
+        <div class="sug-row" id="suggestChips"></div>
+        <div class="add-line">
+          <button class="linklike" id="addDishBtn" type="button" aria-expanded="false" aria-controls="addForm">+ Add a dish</button>
+        </div>
+        <div class="add-form hidden" id="addForm">
+          <div class="add-row">
+            <label class="sr-only" for="dishInput">Dish name</label>
+            <input class="add-input" id="dishInput" type="text" placeholder="Type a dish name" autocomplete="off"
+                   aria-autocomplete="list" aria-controls="dishAc" aria-expanded="false">
+            <button class="add-go" id="dishAddGo" type="button">Add</button>
+          </div>
+          <div class="ac-list hidden" id="dishAc" role="listbox" aria-label="Dish suggestions"></div>
+          <p class="dup-msg hidden" id="dishDupMsg" role="status" aria-live="polite"></p>
+        </div>
+        <p class="helper hidden" id="dishLimitHelper">You can add up to 5 dishes</p>
+      </section>
+
+      <!-- 4 · quick-start chips -->
+      <section aria-labelledby="starterTitle">
+        <p class="starters-title" id="starterTitle">Tap to start your review</p>
+        <div class="starter-row" id="starterChips"></div>
+      </section>
+
+      <!-- 5 · textarea -->
+      <section>
+        <label class="sr-only" for="reviewText">Your review</label>
+        <textarea class="ta" id="reviewText" maxlength="300" placeholder="Something honest, something useful."
+                  aria-describedby="charCounter"></textarea>
+        <p class="counter" id="charCounter"><span id="charNow">0</span> / 300</p>
+      </section>
+    </main>
+
+    <!-- 6 · sticky submit bar -->
+    <footer class="sticky-bar" id="stickyBar">
+      <p class="bar-note hidden" id="ratingHelp" role="status">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+        Choose a star rating to continue
+      </p>
+      <p class="bar-note hidden" id="postError" role="alert">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+        Couldn't post your review. Try again.
+      </p>
+      <button class="cta btn-off" id="submitBtn" type="button" aria-describedby="ratingHelp postError">
+        <span id="ctaLabel">Submit review</span>
+      </button>
+    </footer>
+
+    <!-- discard dialog -->
+    <div class="scrim hidden" id="scrim">
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+        <p class="dlg-title" id="dlgTitle">Discard your review?</p>
+        <div class="dlg-actions">
+          <button class="btn-sec" id="dlgKeep" type="button">Keep writing</button>
+          <button class="linklike" id="dlgDrop" type="button">Discard</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    "use strict";
+    var REDUCED = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var MAX_DISHES = 5;
+    var WORDS = ["", "Poor", "Okay", "Good", "Great", "Loved it"];
+    var SUGGESTED = ["Paneer burrito", "Chicken wrap", "Fries"];
+    var STARTERS = ["Great taste", "Good value", "Quick service", "Would repeat"];
+
+    var ICONS = {
+      up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>',
+      down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zM17 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg>',
+      plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>',
+      x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>'
+    };
+
+    function $(id) { return document.getElementById(id); }
+    function norm(s) { return s.trim().toLowerCase(); }
+    function escapeHtml(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+
+    /* ---------- state (start empty, then restore a saved draft if present) ---------- */
+    var rating = 0, rows = [], starters = [];
+    var FAIL = new URLSearchParams(location.search).get("fail") === "1" || window.__zlForceFail === true;
+    var WORD_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+    function saveDraft() {
+      if (window.__zlNoDraft) return;
+      try {
+        sessionStorage.setItem("zl_draft", JSON.stringify({
+          rating: rating,
+          dishes: rows,
+          starters: starters,
+          text: $("reviewText").value
+        }));
+      } catch (e) { /* storage unavailable */ }
+    }
+    function clearDraft() { try { sessionStorage.removeItem("zl_draft"); } catch (e) {} }
+
+    function restoreDraft() {
+      var d = null;
+      try { d = JSON.parse(sessionStorage.getItem("zl_draft") || "null"); } catch (e) {}
+      if (!d) return false;
+      if (d.rating >= 1 && d.rating <= 5) rating = d.rating;
+      var t = String(d.text || "");
+      if (t.length > 300) t = t.slice(0, 300);
+      $("reviewText").value = t;
+      rows = (Array.isArray(d.dishes) ? d.dishes : [])
+        .filter(function (x) { return x && x.name; })
+        .slice(0, MAX_DISHES)
+        .map(function (x) { return { name: String(x.name), state: x.state === "recommend" || x.state === "skip" ? x.state : null }; });
+      starters = (Array.isArray(d.starters) ? d.starters : []).filter(function (p) { return STARTERS.indexOf(p) !== -1; })
+        .filter(function (p) { return $("reviewText").value.toLowerCase().indexOf(p.toLowerCase()) !== -1; });
+      return true;
+    }
+
+    function hasInput() {
+      return rating > 0 || rows.length > 0 || $("reviewText").value.trim().length > 0;
+    }
+
+    /* ---------- 2 · stars ---------- */
+    function selectStar(n, animate) {
+      var was = rating;
+      rating = n;
+      var btns = $("starGroup").querySelectorAll(".star-btn");
+      for (var i = 0; i < btns.length; i++) {
+        var k = +btns[i].dataset.stars;
+        var on = k <= rating;
+        btns[i].classList.toggle("on", on);
+        btns[i].setAttribute("aria-checked", on ? "true" : "false");
+        btns[i].tabIndex = (k === rating) ? 0 : -1;
+        if (animate && on && k > was) {
+          btns[i].classList.add("pop");
+          window.setTimeout(function (b) { b.classList.remove("pop"); }, 140, btns[i]);
+        }
+      }
+      $("rateLabel").textContent = WORDS[rating];
+      $("ratingHelp").hidden = true;
+      paintCta();
+      saveDraft();
+    }
+    function starKeys() {
+      $("starGroup").addEventListener("keydown", function (e) {
+        var btns = Array.prototype.slice.call($("starGroup").querySelectorAll(".star-btn"));
+        var cur = btns.findIndex(function (b) { return +b.dataset.stars === rating; });
+        var next = null;
+        if (e.key === "ArrowLeft" || e.key === "ArrowUp") next = Math.max(0, (cur === -1 ? 0 : cur) - 1);
+        else if (e.key === "ArrowRight" || e.key === "ArrowDown") next = Math.min(btns.length - 1, (cur === -1 ? 0 : cur) + 1);
+        else if (e.key === "Home") next = 0;
+        else if (e.key === "End") next = btns.length - 1;
+        if (next === null) return;
+        e.preventDefault();
+        var n = +btns[next].dataset.stars;
+        selectStar(n, true);
+        btns[next].focus();
+      });
+    }
+
+    /* ---------- 3 · dish rows ---------- */
+    function renderRows() {
+      $("dishRows").innerHTML = rows.map(function (r, i) {
+        var rec = r.state === "recommend", skip = r.state === "skip";
+        return '<div class="dish-row" data-i="' + i + '">' +
+          '<span class="drow-name">' + escapeHtml(r.name) + '</span>' +
+          '<span class="drow-actions">' +
+          '<button type="button" class="tgl t-rec' + (rec ? ' on' : '') + '" data-act="rec" aria-pressed="' + rec + '" aria-label="Recommend ' + escapeHtml(r.name) + '">' + ICONS.up + 'Recommend</button>' +
+          '<button type="button" class="tgl t-skip' + (skip ? ' on' : '') + '" data-act="skip" aria-pressed="' + skip + '" aria-label="Skip ' + escapeHtml(r.name) + '">' + ICONS.down + 'Skip</button>' +
+          '</span>' +
+          '<button type="button" class="row-x" data-act="x" aria-label="Remove ' + escapeHtml(r.name) + '">' + ICONS.x + '</button>' +
+          '</div>';
+      }).join("");
+      renderSuggestions();
+      updateCapacity();
+      paintCta();
+    }
+    function renderSuggestions() {
+      var left = SUGGESTED.filter(function (name) {
+        return !rows.some(function (r) { return norm(r.name) === norm(name); });
+      });
+      var off = rows.length >= MAX_DISHES;
+      $("suggestChips").innerHTML = left.map(function (name) {
+        return '<button type="button" class="s-chip press" data-name="' + escapeHtml(name) + '"' + (off ? ' aria-disabled="true"' : '') + '>' + ICONS.plus + name + '</button>';
+      }).join("");
+    }
+    function updateCapacity() {
+      var full = rows.length >= MAX_DISHES;
+      $("dishLimitHelper").hidden = !full;
+      $("addDishBtn").hidden = full;
+      if (full) { $("addForm").classList.add("hidden"); $("addDishBtn").setAttribute("aria-expanded", "false"); }
+      renderSuggestions();
+    }
+    function addDish(name) {
+      var v = name.trim();
+      if (!v || rows.length >= MAX_DISHES) { if (rows.length >= MAX_DISHES) updateCapacity(); return; }
+      if (rows.some(function (r) { return norm(r.name) === norm(v); })) {
+        var m = $("dishDupMsg");
+        m.textContent = '"' + v + '" is already on your list';
+        m.hidden = false;
+        return;
+      }
+      $("dishDupMsg").hidden = true;
+      rows.push({ name: v, state: null });
+      renderRows();
+      saveDraft();
+    }
+    function toggleDishState(i, act) {
+      rows[i].state = (rows[i].state === act) ? null : act;
+      renderRows();
+      saveDraft();
+    }
+    function wireDishes() {
+      $("dishRows").addEventListener("click", function (e) {
+        var b = e.target.closest("[data-act]"); if (!b) return;
+        var i = +b.closest(".dish-row").dataset.i;
+        var act = b.dataset.act;
+        if (act === "x") {
+          rows.splice(i, 1);
+          renderRows(); saveDraft();
+        } else {
+          toggleDishState(i, act);
+        }
+      });
+      $("suggestChips").addEventListener("click", function (e) {
+        var c = e.target.closest(".s-chip"); if (!c || c.getAttribute("aria-disabled") === "true") return;
+        addDish(c.dataset.name);
+      });
+      $("addDishBtn").addEventListener("click", function () {
+        if (rows.length >= MAX_DISHES) return;
+        var f = $("addForm");
+        var open = f.classList.toggle("hidden") === false;
+        f.classList.toggle("hidden", !open);
+        $("addDishBtn").setAttribute("aria-expanded", open ? "true" : "false");
+        if (open) $("dishInput").focus();
+      });
+      $("dishAddGo").addEventListener("click", function () { addDish($("dishInput").value); });
+      $("dishInput").addEventListener("keydown", function (e) {
+        if (e.key === "Enter") { e.preventDefault(); addDish($("dishInput").value); hideAc(); }
+        if (e.key === "ArrowDown" && !$("dishAc").hidden) {
+          var first = $("dishAc").querySelector(".ac-opt");
+          if (first) { e.preventDefault(); first.focus(); }
+        }
+      });
+      $("dishInput").addEventListener("input", function () { renderAc(); $("dishDupMsg").hidden = true; });
+      $("dishInput").addEventListener("blur", function () { window.setTimeout(hideAc, 130); });
+      $("dishAc").addEventListener("keydown", function (e) {
+        var opts = Array.prototype.slice.call($("dishAc").querySelectorAll(".ac-opt"));
+        var i = opts.indexOf(document.activeElement);
+        if ((e.key === "ArrowDown" || e.key === "ArrowUp") && opts.length) {
+          e.preventDefault();
+          var n = e.key === "ArrowDown" ? Math.min(opts.length - 1, i + 1) : Math.max(0, i - 1);
+          opts[n].focus();
+        }
+        if (e.key === "Escape") { hideAc(); $("dishInput").focus(); }
+      });
+      $("dishAc").addEventListener("click", function (e) {
+        var o = e.target.closest(".ac-opt"); if (!o) return;
+        addDish(o.dataset.name);
+        $("dishInput").value = "";
+        hideAc();
+        $("dishInput").focus();
+      });
+    }
+    function renderAc() {
+      var q = norm($("dishInput").value);
+      var box = $("dishAc");
+      if (!q) { hideAc(); return; }
+      var opts = SUGGESTED.filter(function (name) {
+        return norm(name).indexOf(q) !== -1 && !rows.some(function (r) { return norm(r.name) === norm(name); });
+      });
+      if (!opts.length) { hideAc(); return; }
+      box.innerHTML = opts.map(function (name) {
+        return '<button type="button" class="ac-opt" role="option" data-name="' + escapeHtml(name) + '" tabindex="-1">' + ICONS.plus + name + '</button>';
+      }).join("");
+      box.classList.remove("hidden");
+      $("dishInput").setAttribute("aria-expanded", "true");
+    }
+    function hideAc() {
+      $("dishAc").classList.add("hidden");
+      $("dishAc").innerHTML = "";
+      $("dishInput").setAttribute("aria-expanded", "false");
+    }
+
+    /* ---------- 4 · quick-start chips ---------- */
+    function withPhrase(cur, ph) {
+      cur = (cur || "").trim();
+      if (!cur) return ph + ".";
+      if (cur.toLowerCase().indexOf(ph.toLowerCase()) !== -1) return cur;
+      if (!/[.!?]$/.test(cur)) cur += ".";
+      return cur + " " + ph + ".";
+    }
+    function withoutPhrase(cur, ph) {
+      var esc = ph.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+      var out = cur.replace(new RegExp("(^|[.\\s])" + esc + "\\.?(?=[.\\s]|$)", "i"), function (m, pre) { return pre === "." ? ". " : " "; });
+      out = out.replace(/\s{2,}/g, " ").replace(/^\s*[.]\s*/, "").trim();
+      if (out) out = out.charAt(0).toUpperCase() + out.slice(1);
+      return out;
+    }
+    function renderStarters() {
+      $("starterChips").innerHTML = STARTERS.map(function (ph) {
+        var on = starters.indexOf(ph) !== -1;
+        return '<button type="button" class="s-chip press" data-ph="' + escapeHtml(ph) + '" aria-pressed="' + on + '" aria-label="Insert: ' + escapeHtml(ph) + '">' + ph + '</button>';
+      }).join("");
+    }
+    function toggleStarter(ph) {
+      var ta = $("reviewText");
+      var i = starters.indexOf(ph);
+      if (i === -1) {
+        starters.push(ph);
+        ta.value = withPhrase(ta.value, ph);
+      } else {
+        starters.splice(i, 1);
+        ta.value = withoutPhrase(ta.value, ph);
+        starters = starters.filter(function (p) {
+          var has = ta.value.toLowerCase().indexOf(p.toLowerCase()) !== -1;
+          return has;
+        });
+      }
+      renderStarters();
+      paintCounter();
+      paintCta();
+      saveDraft();
+    }
+    function wireStarters() {
+      $("starterChips").addEventListener("click", function (e) {
+        var c = e.target.closest(".s-chip"); if (!c) return;
+        toggleStarter(c.dataset.ph);
+      });
+    }
+
+    /* ---------- 5 · textarea ---------- */
+    function paintCounter() {
+      var len = $("reviewText").value.length;
+      $("charNow").textContent = String(len);
+      $("charCounter").classList.toggle("warn", len >= 290);
+    }
+
+    /* ---------- 6 · sticky submit bar ---------- */
+    function paintCta() {
+      $("submitBtn").classList.toggle("btn-off", rating === 0);
+    }
+    var posting = false;
+    function fmtFull(d) {
+      var h = d.getHours(), ap = h >= 12 ? "PM" : "AM", h12 = h % 12 || 12;
+      var mm = ("0" + d.getMinutes()).slice(-2);
+      return WORD_MONTHS[d.getMonth()] + " " + d.getDate() + ", " + d.getFullYear() + ", " + h12 + ":" + mm + " " + ap;
+    }
+    function restoreCta() {
+      posting = false;
+      var b = $("submitBtn");
+      b.classList.remove("posting");
+      b.removeAttribute("aria-busy");
+      $("ctaLabel").innerHTML = "Submit review";
+    }
+    function submit() {
+      if (posting) return;
+      if (!rating) {
+        $("ratingHelp").hidden = false;
+        var b = $("submitBtn");
+        b.classList.add("shake");
+        window.setTimeout(function () { b.classList.remove("shake"); }, 260);
+        $("rateSec").scrollIntoView({ behavior: REDUCED ? "auto" : "smooth", block: "center" });
+        return;
+      }
+      posting = true;
+      var btn = $("submitBtn");
+      btn.classList.add("posting");
+      btn.setAttribute("aria-busy", "true");
+      $("ratingHelp").hidden = true;
+      $("postError").hidden = true;
+      $("ctaLabel").innerHTML = '<span class="spin" aria-hidden="true"></span>Posting…';
+      window.setTimeout(function () {
+        if (FAIL) {
+          restoreCta();
+          $("postError").hidden = false;
+          return;
+        }
+        var chosen = rows.filter(function (r) { return r.state; }).map(function (r) {
+          return { name: r.name, state: r.state };
+        });
+        var entry = {
+          id: "u" + Date.now(),
+          stars: rating,
+          text: $("reviewText").value.trim(),
+          when: new Date().toISOString(),
+          full: fmtFull(new Date()),
+          dishes: chosen,
+          helpful: 0
+        };
+        var stored = [];
+        try { stored = JSON.parse(localStorage.getItem("zl_reviews") || "[]"); } catch (e) {}
+        stored.push(entry);
+        try { localStorage.setItem("zl_reviews", JSON.stringify(stored)); } catch (e) {}
+        clearDraft();
+        sessionStorage.setItem("zl_toast", "1");
+        location.href = "/redesign.html";
+      }, 600);
+    }
+
+    /* ---------- back + discard dialog ---------- */
+    function wireBack() {
+      var back = function () {
+        if (posting) return;
+        if (hasInput()) openDlg();
+        else location.href = "/redesign.html";
+      };
+      $("backBtn").addEventListener("click", back);
+      $("scrim").addEventListener("click", function (e) { if (e.target === $("scrim")) closeDlg(); });
+      $("dlgKeep").addEventListener("click", closeDlg);
+      $("dlgDrop").addEventListener("click", function () {
+        clearDraft();
+        $("scrim").classList.add("hidden");
+        location.href = "/redesign.html";
+      });
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape" && !$("scrim").classList.contains("hidden")) closeDlg();
+      });
+    }
+    function openDlg() {
+      $("scrim").classList.remove("hidden");
+      $("dlgKeep").focus();
+    }
+    function closeDlg() {
+      $("scrim").classList.add("hidden");
+      $("backBtn").focus();
+    }
+
+    /* ---------- keyboard: keep the sticky bar above it ---------- */
+    function fitToViewport() {
+      var vv = window.visualViewport;
+      var bar = $("stickyBar");
+      if (!vv || !vv.addEventListener) { window.__vvFit = false; return; }
+      var fit = function () {
+        var overlap = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+        bar.style.transform = overlap > 0 ? "translateY(-" + overlap + "px)" : "";
+      };
+      vv.addEventListener("resize", fit);
+      vv.addEventListener("scroll", fit);
+      fit();
+      window.__vvFit = true;
+    }
+
+    /* ---------- boot ---------- */
+    var restored = restoreDraft();
+    if (rating) selectStar(rating, false);
+    renderRows();
+    renderStarters();
+    paintCounter();
+    paintCta();
+    starKeys();
+    wireDishes();
+    wireStarters();
+    wireBack();
+    fitToViewport();
+    $("reviewText").addEventListener("input", function () {
+      if ($("reviewText").value.length > 300) $("reviewText").value = $("reviewText").value.slice(0, 300);
+      paintCounter();
+      saveDraft();
+      paintCta();
+    });
+    $("starGroup").addEventListener("click", function (e) {
+      var b = e.target.closest(".star-btn"); if (!b) return;
+      selectStar(+b.dataset.stars, true);
+    });
+    $("submitBtn").addEventListener("click", submit);
+  </script>
+</body>
+</html>
