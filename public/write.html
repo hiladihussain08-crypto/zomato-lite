@@ -581,7 +581,9 @@
       saveDraft();
     }
     function toggleDishState(i, act) {
-      rows[i].state = (rows[i].state === act) ? null : act;
+      /* action keys ("rec"/"skip") map onto state names ("recommend"/"skip") */
+      var name = act === "rec" ? "recommend" : act;
+      rows[i].state = (rows[i].state === name) ? null : name;
       renderRows();
       saveDraft();
     }
