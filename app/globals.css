@@ -84,3 +84,49 @@ body {
     opacity: 0.55;
   }
 }
+
+/* Write-page motion (from the write.html prototype): the star pop and the
+   no-rating shake exist only when the visitor allows motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .zt-pop {
+    animation: zpop 120ms ease;
+  }
+  @keyframes zpop {
+    0% {
+      transform: scale(1);
+    }
+    45% {
+      transform: scale(1.14);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+  .zt-shake {
+    animation: zshakeX 220ms ease;
+  }
+  @keyframes zshakeX {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    25% {
+      transform: translateX(-3px);
+    }
+    50% {
+      transform: translateX(3px);
+    }
+    75% {
+      transform: translateX(-2px);
+    }
+  }
+  .zt-spin {
+    animation: zspin 0.8s linear infinite;
+  }
+  @keyframes zspin {
+    to {
+      transform: rotate(1turn);
+    }
+  }
+}
+
