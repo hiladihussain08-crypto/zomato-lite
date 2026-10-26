@@ -124,9 +124,10 @@ export default function ReviewPage({ params }: { params: Promise<{ restaurantId:
 
   const [dlgOpen, setDlgOpen] = useState(false);
 
+  const backRef = useRef<HTMLButtonElement>(null);
+  const keepRef = useRef<HTMLButtonElement>(null);
   const barRef = useRef<HTMLElement>(null);
   const rateRef = useRef<HTMLElement>(null);
-  const backRef = useRef<HTMLButtonElement>(null);
   const addInputRef = useRef<HTMLInputElement>(null);
   const barLiftRef = useRef<HTMLDivElement>(null);
 
@@ -376,6 +377,24 @@ export default function ReviewPage({ params }: { params: Promise<{ restaurantId:
       router.push(`/restaurant/${restaurantId}`);
     }
   }
+
+  // The dialog behaves like the prototype's: Escape means "keep writing", and
+  // the safe choice (Keep) receives focus so Enter agrees with it by default.
+  useEffect(() => {
+    if (!dlgOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setDlgOpen(false);
+        backRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    const t = window.setTimeout(() => keepRef.current?.focus(), 30);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.clearTimeout(t);
+    };
+  }, [dlgOpen]);
 
   if (loadFailedStatus !== null) {
     return (
@@ -736,6 +755,7 @@ export default function ReviewPage({ params }: { params: Promise<{ restaurantId:
             </p>
             <div className="flex items-center gap-3">
               <button
+                ref={keepRef}
                 type="button"
                 className="min-h-[44px] rounded-xl border border-[var(--border)] bg-[var(--bg)] px-4 text-[14px] font-semibold hover:border-[var(--secondary)]"
                 onClick={() => {
