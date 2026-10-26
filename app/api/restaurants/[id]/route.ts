@@ -69,6 +69,22 @@ export async function GET(
         )
       : [];
 
+  // The redesigned summary needs the full rating distribution (bars 5 -> 1,
+  // zeros included) and how many stars the rounded-down average lights up.
+  // Both are answers, so they are computed here - the frontend only draws.
+  const distRows = await q(
+    "SELECT rating, count(*)::int AS n FROM reviews WHERE restaurant_id = $1 GROUP BY rating",
+    [restaurantId]
+  );
+  const distBy = new Map<number, number>();
+  for (const d of distRows) distBy.set(Number(d.rating), Number(d.n));
+  const maxCount = Math.max(1, ...distBy.values());
+  const distribution = [5, 4, 3, 2, 1].map((rating) => ({
+    rating,
+    count: distBy.get(rating) ?? 0,
+    pct: Math.round(((distBy.get(rating) ?? 0) / maxCount) * 100),
+  }));
+
   // Dish verdict totals, straight from SQL. The sum stays in the database's hands;
   // the API only carries the answer upward. Ordered by mentions so the write page
   // can read its autocomplete suggestions from the same list.
@@ -122,6 +138,8 @@ export async function GET(
     cuisine: restaurant.cuisine,
     area: restaurant.area,
     averageRating,
+    averageStarsOn: averageRating !== null ? Math.floor(averageRating) : 0,
+    distribution,
     totalReviews,
     latestReview:
       latestRows.length > 0
