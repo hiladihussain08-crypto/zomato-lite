@@ -463,23 +463,24 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
     }
   }, [ratingF, dishF]);
 
-  // Fixed-bar state: the bar's background and the restaurant name appear
-  // once the hero has scrolled under it.
+  // Fixed-bar state: the bar's background and name follow the scroll position,
+  // and the same handler detects "scrolled past the rating section" for the
+  // filter chip (the section's bottom at or above the viewport top). Scroll
+  // position is the only input, so a plain listener covers every case - no
+  // observer quirks.
   useEffect(() => {
-    const onScroll = () => setPageScrolled(window.scrollY > 90);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  // The filter chip appears only when the rating section is completely out
-  // of view - "scrolled past the rating section".
-  useEffect(() => {
-    const el = ratingSecRef.current;
-    if (!el || typeof IntersectionObserver === "undefined") return;
-    const io = new IntersectionObserver((entries) => setRatingOnScreen(entries[0].isIntersecting));
-    io.observe(el);
-    return () => io.disconnect();
+    const update = () => {
+      const scrolled = window.scrollY > 90;
+      setPageScrolled((prev) => (prev === scrolled ? prev : scrolled));
+      const sec = ratingSecRef.current;
+      if (sec) {
+        const past = sec.getBoundingClientRect().bottom <= 0;
+        setRatingOnScreen((prev) => (prev === past ? prev : past));
+      }
+    };
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    return () => window.removeEventListener("scroll", update);
   }, [data]);
 
   const allReviews = data ? (data.latestReview ? [data.latestReview, ...data.reviews] : data.reviews) : [];
