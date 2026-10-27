@@ -410,10 +410,12 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
       mutate();
       return;
     }
+    // The filter itself lands immediately; the outgoing cards stay on screen
+    // (frozen snapshot) while they fade out, then the fresh list fades in.
     setStaleList(shown);
     setListDimmed(true);
+    mutate();
     fadeT.current = window.setTimeout(() => {
-      mutate();
       setStaleList(null);
       setListDimmed(false);
     }, 150);
