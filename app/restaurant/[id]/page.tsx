@@ -37,6 +37,13 @@ type RestaurantData = {
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+// Words for the singular filter sentences: "Showing 1 four-star review".
+const WORDS_FOR = ["", "one", "two", "three", "four", "five"];
+
+function reducedMotion() {
+  return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
 function UpIcon({ className = "h-3.5 w-3.5" }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
@@ -55,11 +62,30 @@ function DownIcon({ className = "h-3.5 w-3.5" }: { className?: string }) {
   );
 }
 
-function CheckIcon() {
+function CheckIcon({ className = "h-[15px] w-[15px]" }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
-      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="h-[15px] w-[15px]">
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
       <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
+
+function ChevronIcon({ className = "h-3 w-3" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+      <path d="m9 18 6-6-6-6" />
+    </svg>
+  );
+}
+
+function XMiniIcon({ className = "h-3 w-3" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
     </svg>
   );
 }
@@ -266,6 +292,21 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
   const [voterKey, setVoterKey] = useState<string>("");
   const [toast, setToast] = useState(false);
 
+  // Rating-filter choreography: the fixed top bar gains the page background
+  // once the hero has scrolled by, the filter chip lives there only while the
+  // rating section is out of view, card list swaps fade over 150ms, and
+  // restores keep the scroll position stable (see the commit effect below).
+  const [pageScrolled, setPageScrolled] = useState(false);
+  const [ratingOnScreen, setRatingOnScreen] = useState(true);
+  const [listDimmed, setListDimmed] = useState(false);
+  const [dishBorn, setDishBorn] = useState(0);
+  const ratingSecRef = useRef<HTMLElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const fadeT = useRef<number | null>(null);
+  const anchorTop = useRef<number | null>(null);
+  const scrollHome = useRef(false);
+  const listIntoView = useRef(false);
+
   // Anonymous, account-free helpful voting: one random id per browser,
   // persisted in localStorage, sent with every vote.
   useEffect(() => {
@@ -344,6 +385,95 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
     }
   }
 
+  // ---------- rating filter ----------
+
+  // Card swaps fade out (150ms), swap, fade in. Reduced motion swaps at once.
+  // kind: "apply" = selecting a filter ("scroll the list into view if it is
+  // below the fold"), "stabilize" = clearing (keep the viewport still),
+  // "home" = the pinned chip (also scroll back to the rating section).
+  function transitionTo(commit: () => void, kind: "apply" | "stabilize" | "home" = "apply") {
+    if (fadeT.current !== null) window.clearTimeout(fadeT.current);
+    if (reducedMotion()) {
+      commit();
+      return;
+    }
+    setListDimmed(true);
+    fadeT.current = window.setTimeout(() => {
+      if (kind === "stabilize") {
+        const el = ratingSecRef.current;
+        anchorTop.current = el ? Math.round(el.getBoundingClientRect().top) : null;
+      } else if (kind === "home") {
+        scrollHome.current = true;
+      } else {
+        listIntoView.current = true;
+      }
+      if (kind !== "apply") setDishBorn((k) => k + 1);
+      commit();
+      setListDimmed(false);
+    }, 150);
+  }
+
+  function selectRating(r: number) {
+    if (r === ratingF) {
+      transitionTo(() => setRatingF(null), "stabilize");
+      return;
+    }
+    transitionTo(() => {
+      setRatingF(r);
+      setDishF(null); // a rating filter and a dish filter never coexist
+    }, "apply");
+  }
+
+  function clearRating() {
+    if (ratingF === null) return;
+    transitionTo(() => setRatingF(null), "stabilize");
+  }
+
+  function clearFromChip() {
+    if (ratingF === null) return;
+    transitionTo(() => setRatingF(null), "home");
+  }
+
+  // The committed layout is measured here, after React has painted it, so the
+  // scroll repairs act on the new geometry rather than a guess.
+  useEffect(() => {
+    const el = ratingSecRef.current;
+    if (anchorTop.current !== null && el) {
+      const delta = Math.round(el.getBoundingClientRect().top) - anchorTop.current;
+      if (Math.abs(delta) > 2) window.scrollBy({ top: delta });
+      anchorTop.current = null;
+    } else if (scrollHome.current && el) {
+      scrollHome.current = false;
+      const top = Math.max(0, Math.round(el.getBoundingClientRect().top + window.scrollY - 58));
+      window.scrollTo({ top, behavior: reducedMotion() ? "auto" : "smooth" });
+    } else if (listIntoView.current && listRef.current) {
+      const listTop = listRef.current.getBoundingClientRect().top;
+      if (listTop >= window.innerHeight) {
+        window.scrollBy({ top: listTop - 58, behavior: reducedMotion() ? "auto" : "smooth" });
+      }
+      listIntoView.current = false;
+    }
+  }, [ratingF, dishF]);
+
+  // Fixed-bar state: the bar's background and the restaurant name appear
+  // once the hero has scrolled under it.
+  useEffect(() => {
+    const onScroll = () => setPageScrolled(window.scrollY > 90);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // The filter chip appears only when the rating section is completely out
+  // of view - "scrolled past the rating section".
+  useEffect(() => {
+    const el = ratingSecRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver((entries) => setRatingOnScreen(entries[0].isIntersecting));
+    io.observe(el);
+    return () => io.disconnect();
+  }, [data]);
+
   const allReviews = data ? (data.latestReview ? [data.latestReview, ...data.reviews] : data.reviews) : [];
 
   const passes = (r: Review) => {
@@ -356,6 +486,16 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
   const dishState = (d: DishCount): "recommend" | "skip" =>
     d.recommendCount > 0 || d.skipCount === 0 ? "recommend" : "skip";
 
+  // The list heading mirrors the filter: "9 reviews · 5 stars" / "3 reviews · Fries".
+  let headingText = "Reviews";
+  if (data) {
+    if (ratingF !== null) {
+      headingText = `${shown.length} ${shown.length === 1 ? "review" : "reviews"} · ${ratingF} stars`;
+    } else if (dishF !== null) {
+      headingText = `${shown.length} ${shown.length === 1 ? "review" : "reviews"} · ${dishF}`;
+    }
+  }
+
   const helpText: string | null =
     loadFailedStatus !== null
       ? loadFailedStatus === 404
@@ -367,7 +507,7 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
     <div className="mx-auto max-w-[480px]">
       {/* Toast - shown when returning from a successful /review post */}
       <div
-        className={`pointer-events-none fixed left-4 right-4 top-3.5 z-20 mx-auto flex max-w-[448px] items-center gap-2 rounded-full bg-[var(--rec-bg)] px-3.5 py-2.5 text-[13px] font-semibold text-[var(--rec-text)] transition-all duration-150 ${
+        className={`pointer-events-none fixed left-4 right-4 top-3.5 z-30 mx-auto flex max-w-[448px] items-center gap-2 rounded-full bg-[var(--rec-bg)] px-3.5 py-2.5 text-[13px] font-semibold text-[var(--rec-text)] transition-all duration-150 ${
           toast ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0"
         }`}
         role="status"
@@ -392,6 +532,34 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
 
       {data && (
         <>
+          {/* Fixed top bar: transparent over the hero; page colour, name and
+              the rating-filter chip once the content has scrolled beneath */}
+          <div
+            className={`fixed inset-x-0 top-0 z-20 mx-auto flex h-[52px] max-w-[480px] items-center gap-2 border-b px-4 motion-safe:transition-colors duration-150 ${
+              pageScrolled ? "bg-[var(--bg)] border-[var(--border)]" : "bg-transparent border-transparent"
+            }`}
+          >
+            <span
+              className={`min-w-0 truncate text-[16px] font-semibold motion-safe:transition-opacity duration-150 ${
+                pageScrolled ? "opacity-100" : "opacity-0"
+              }`}
+              aria-hidden={pageScrolled ? undefined : true}
+            >
+              {data.name}
+            </span>
+            {ratingF !== null && !ratingOnScreen && (
+              <button
+                type="button"
+                aria-label={`Clear the ${ratingF}-star filter`}
+                onClick={clearFromChip}
+                className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--brand)] px-2.5 py-1.5 text-[13px] font-semibold text-[var(--on-brand)]"
+              >
+                {ratingF} stars
+                <XMiniIcon />
+              </button>
+            )}
+          </div>
+
           {/* Hero */}
           <header className="relative h-[150px] overflow-hidden rounded-b-2xl">
             <div aria-hidden="true" className="absolute inset-0 bg-[url('/burrito.jpg')] bg-cover bg-center" />
@@ -415,71 +583,77 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
               </section>
             ) : (
               <>
-                {/* Rating summary */}
-                <section className="flex items-start gap-5" aria-label="Rating summary">
-                  <div className="shrink-0 min-w-[92px]">
-                    <p className="m-0 text-[40px] font-semibold leading-none tracking-[-0.01em]">
-                      {data.averageRating}
-                    </p>
-                    <p className="mt-1.5 text-[15px] leading-none tracking-[2px]" aria-label={`${data.averageRating} out of 5 stars`}>
-                      {Array.from({ length: 5 }, (_, i) => (
-                        <span key={i} className={i < data.averageStarsOn ? "text-[var(--star)]" : "text-[var(--muted)]"}>
-                          {i < data.averageStarsOn ? "★" : "☆"}
-                        </span>
-                      ))}
-                    </p>
-                    <p className="m-0 mt-2 text-[13px] text-[var(--secondary)]">
-                      {data.totalReviews} {data.totalReviews === 1 ? "review" : "reviews"}
-                    </p>
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <div id="rating-bar-rows" role="group" aria-label="Filter reviews by rating">
-                      {data.distribution.map((d) => {
-                        const active = ratingF === d.rating;
-                        return (
-                          <button
-                            key={d.rating}
-                            type="button"
-                            className="-mx-2 flex w-[calc(100%+16px)] items-center gap-2 rounded-xl px-2 py-[13px] text-left hover:bg-[var(--skip-bg)]"
-                            aria-pressed={active}
-                            aria-label={`Filter by ${d.rating} star reviews, ${d.count} review${d.count === 1 ? "" : "s"}`}
-                            onClick={() => setRatingF(active ? null : d.rating)}
-                          >
-                            <span className={`w-2.5 shrink-0 text-[12px] font-semibold ${active ? "text-[var(--text)]" : "text-[var(--secondary)]"}`}>
-                              {d.rating}
-                            </span>
-                            <span className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-[3px] bg-[var(--border)]">
-                              <span
-                                className={`block h-full rounded-[3px] bg-[var(--brand)] transition-opacity duration-150 ${ratingF !== null && !active ? "opacity-40" : "opacity-100"}`}
-                                style={{ width: `${d.pct}%` }}
-                              />
-                            </span>
-                            <span
-                              className={`w-4 shrink-0 text-right text-[12px] ${ratingF !== null && !active ? "text-[var(--secondary)] opacity-40" : "text-[var(--secondary)]"}`}
-                            >
-                              {d.count}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {ratingF !== null ? (
-                      <button
-                        type="button"
-                        className="ml-2 inline-block text-[13px] font-semibold text-[var(--brand)] underline underline-offset-2"
-                        onClick={() => setRatingF(null)}
+                {/* Rating summary - two top-aligned columns, one at every width */}
+                <section ref={ratingSecRef} className="-mx-3.5 p-3.5" aria-label="Rating summary">
+                  <div className="flex items-start gap-3">
+                    <div className="w-[68px] shrink-0">
+                      <p className="m-0 text-[36px] font-semibold leading-none tracking-[-0.01em]">{data.averageRating}</p>
+                      <p
+                        className="mt-1.5 whitespace-nowrap text-[12px] leading-none tracking-[1px]"
+                        aria-label={`${data.averageRating} out of 5 stars`}
                       >
-                        Clear filter
-                      </button>
-                    ) : (
-                      <p className="ml-2 mt-1.5 text-[13px] text-[var(--muted)]">Tap a bar to filter reviews</p>
-                    )}
+                        {Array.from({ length: 5 }, (_, i) => (
+                          <span key={i} className={i < data.averageStarsOn ? "text-[var(--star)]" : "text-[var(--muted)]"}>
+                            {i < data.averageStarsOn ? "★" : "☆"}
+                          </span>
+                        ))}
+                      </p>
+                      <p className="m-0 mt-1.5 text-[11px] leading-[1.2] text-[var(--secondary)]">
+                        {data.totalReviews} {data.totalReviews === 1 ? "review" : "reviews"}
+                      </p>
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <p className="m-0 mb-1.5 text-[13px] leading-none text-[var(--secondary)]">Filter by rating</p>
+                      <div id="rating-bar-rows" role="group" aria-label="Filter reviews by rating" className="flex flex-col gap-1">
+                        {data.distribution.map((d) => {
+                          const active = ratingF === d.rating;
+                          const dead = d.count === 0;
+                          return (
+                            <button
+                              key={d.rating}
+                              type="button"
+                              className={`flex h-8 shrink-0 items-center gap-1.5 rounded-lg border-[0.5px] border-[var(--border)] px-2 text-left hover:bg-[var(--skip-bg)] active:bg-[var(--border)] ${
+                                dead || (ratingF !== null && !active) ? "opacity-45" : "opacity-100"
+                              }`}
+                              style={
+                                active
+                                  ? { borderColor: "#E23744", borderWidth: "1.5px", backgroundColor: "rgba(226,55,68,0.08)" }
+                                  : undefined
+                              }
+                              aria-pressed={active}
+                              aria-disabled={dead || undefined}
+                              aria-label={`Filter by ${d.rating} star reviews, ${d.count} review${d.count === 1 ? "" : "s"}`}
+                              onClick={() => {
+                                if (dead) return;
+                                selectRating(d.rating);
+                              }}
+                            >
+                              <span className="w-[14px] shrink-0 text-[12px] font-semibold text-[var(--text)]">{d.rating}</span>
+                              <span className="h-[6px] min-w-0 flex-1 overflow-hidden rounded-[3px] bg-[var(--border)]">
+                                <span className="block h-full rounded-[3px] bg-[var(--brand)]" style={{ width: `${d.pct}%` }} />
+                              </span>
+                              <span className="min-w-[16px] shrink-0 text-right text-[12px] text-[var(--secondary)]">{d.count}</span>
+                              {active ? (
+                                <CheckIcon className="h-3 w-3 shrink-0 text-[var(--brand)]" />
+                              ) : dead ? null : (
+                                <ChevronIcon className="h-3 w-3 shrink-0 text-[var(--muted)]" />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 </section>
 
-                {/* Dish chips */}
-                <section className="mt-8" aria-labelledby="dishHeading">
+                {/* Dish section while no rating filter runs; the filter's result line otherwise */}
+                {ratingF === null && (
+                  <section
+                    key={dishBorn}
+                    aria-labelledby="dishHeading"
+                    className={`mt-2 border-t border-[var(--border)] pt-5 ${dishBorn > 0 ? "zt-fadein" : ""}`}
+                  >
                   <h2 id="dishHeading" className="m-0 mb-3 text-[13px] font-semibold">
                     What people say about the food
                   </h2>
@@ -502,7 +676,7 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
                             } ${on ? "outline outline-[1.5px]" : ""}`}
                             style={on ? { outlineColor: up ? "var(--rec-text)" : "var(--skip-text)", outlineOffset: "1px" } : undefined}
                             aria-pressed={on}
-                            onClick={() => setDishF(on ? null : d.name)}
+                            onClick={() => transitionTo(() => setDishF(on ? null : d.name))}
                           >
                             {up ? <UpIcon className="h-[14px] w-[14px]" /> : <DownIcon className="h-[14px] w-[14px]" />}
                             <span>
@@ -517,12 +691,28 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
                   {data.dishes.length > 0 && (
                     <p className="mt-2 text-[13px] text-[var(--muted)]">Tap a dish to see reviews that mention it</p>
                   )}
-                </section>
+                  </section>
+                )}
+
+                {ratingF !== null && (
+                  <div id="filterResult" aria-live="polite" className="mt-4 flex items-center justify-between gap-3">
+                    <p className="m-0 min-w-0 text-[13px] leading-[1.35]">
+                      Showing {shown.length} {WORDS_FOR[ratingF]}-star review{shown.length === 1 ? "" : "s"}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={clearRating}
+                      className="shrink-0 rounded-[10px] bg-[var(--card)] px-[10px] py-2 text-[13px] font-semibold text-[var(--brand)] hover:opacity-90"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                )}
 
                 {/* Reviews */}
-                <section className="mt-8" aria-labelledby="reviewsHeading">
-                  <h2 id="reviewsHeading" className="sr-only">
-                    Reviews
+                <section aria-labelledby="reviewsHeading" className="mt-7">
+                  <h2 id="reviewsHeading" className="m-0 text-[13px] font-semibold">
+                    {headingText}
                   </h2>
                   {allReviews.length === 0 ? (
                     <div className="flex flex-col items-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--card)] px-3 py-6 text-center">
@@ -543,7 +733,12 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
                       </button>
                     </div>
                   ) : (
-                    <div className="flex flex-col gap-3">
+                    <div
+                      ref={listRef}
+                      className={`mt-2.5 flex flex-col gap-3 transition-opacity duration-150 motion-reduce:transition-none ${
+                        listDimmed ? "opacity-0" : "opacity-100"
+                      }`}
+                    >
                       {shown.map((r) => (
                         <ReviewCard
                           key={r.id}

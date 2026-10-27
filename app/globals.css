@@ -128,5 +128,16 @@ body {
       transform: rotate(1turn);
     }
   }
+  .zt-fadein {
+    animation: zfade 150ms ease;
+  }
+  @keyframes zfade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
 }
 
