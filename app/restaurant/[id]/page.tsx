@@ -299,6 +299,7 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
   const [pageScrolled, setPageScrolled] = useState(false);
   const [ratingOnScreen, setRatingOnScreen] = useState(true);
   const [listDimmed, setListDimmed] = useState(false);
+  const [staleList, setStaleList] = useState<Review[] | null>(null);
   const [dishBorn, setDishBorn] = useState(0);
   const ratingSecRef = useRef<HTMLElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -387,28 +388,33 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
 
   // ---------- rating filter ----------
 
-  // Card swaps fade out (150ms), swap, fade in. Reduced motion swaps at once.
+  // Filter state commits instantly (row ink, result line, heading, dish swap
+  // all answer at once), while the card list fades: the outgoing cards stay
+  // on screen dimming out over 150ms, then the new list fades in. Reduced
+  // motion commits and swaps without any fade.
   // kind: "apply" = selecting a filter ("scroll the list into view if it is
   // below the fold"), "stabilize" = clearing (keep the viewport still),
   // "home" = the pinned chip (also scroll back to the rating section).
-  function transitionTo(commit: () => void, kind: "apply" | "stabilize" | "home" = "apply") {
+  function transitionTo(mutate: () => void, kind: "apply" | "stabilize" | "home" = "apply") {
     if (fadeT.current !== null) window.clearTimeout(fadeT.current);
+    if (kind === "stabilize") {
+      const el = ratingSecRef.current;
+      anchorTop.current = el ? Math.round(el.getBoundingClientRect().top) : null;
+    } else if (kind === "home") {
+      scrollHome.current = true;
+    } else {
+      listIntoView.current = true;
+    }
+    if (kind !== "apply") setDishBorn((k) => k + 1);
     if (reducedMotion()) {
-      commit();
+      mutate();
       return;
     }
+    setStaleList(shown);
     setListDimmed(true);
     fadeT.current = window.setTimeout(() => {
-      if (kind === "stabilize") {
-        const el = ratingSecRef.current;
-        anchorTop.current = el ? Math.round(el.getBoundingClientRect().top) : null;
-      } else if (kind === "home") {
-        scrollHome.current = true;
-      } else {
-        listIntoView.current = true;
-      }
-      if (kind !== "apply") setDishBorn((k) => k + 1);
-      commit();
+      mutate();
+      setStaleList(null);
       setListDimmed(false);
     }, 150);
   }
@@ -482,6 +488,10 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
     return true;
   };
   const shown = allReviews.filter(passes);
+
+  // During the 150ms card crossfade the outgoing list keeps rendering; the
+  // rest of the page (ink, result line, heading) already reflects the filter.
+  const listShown = staleList ?? shown;
 
   const dishState = (d: DishCount): "recommend" | "skip" =>
     d.recommendCount > 0 || d.skipCount === 0 ? "recommend" : "skip";
@@ -739,7 +749,7 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
                         listDimmed ? "opacity-0" : "opacity-100"
                       }`}
                     >
-                      {shown.map((r) => (
+                      {listShown.map((r) => (
                         <ReviewCard
                           key={r.id}
                           review={r}
