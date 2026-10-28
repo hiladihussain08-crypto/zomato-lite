@@ -40,6 +40,11 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 // Words for the singular filter sentences: "Showing 1 four-star review".
 const WORDS_FOR = ["", "one", "two", "three", "four", "five"];
 
+// Height of the reviews page fixed header. Drives the docking boundary for
+// the filter chip and the scroll-margin that keeps the rating section clear
+// of the header when the page scrolls back to it.
+const HEADER_H = 52;
+
 function reducedMotion() {
   return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
@@ -293,17 +298,21 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
   const [toast, setToast] = useState(false);
 
   // Rating-filter choreography: the fixed top bar gains the page background
-  // once the hero has scrolled by, the filter chip lives there only while the
-  // rating section is out of view, card list swaps fade over 150ms, and
-  // restores keep the scroll position stable (see the commit effect below).
+  // once the hero has scrolled by; the result line under the rating block is
+  // the filter's visible anchor, and an IntersectionObserver docks it into a
+  // header chip once the line passes under that bar (and back). Card list
+  // swaps fade over 150ms, and clears keep scroll targets pinned (commit
+  // effect below).
   const [pageScrolled, setPageScrolled] = useState(false);
-  const [ratingOnScreen, setRatingOnScreen] = useState(true);
+  const [chipState, setChipState] = useState<"none" | "in" | "out">("none");
   const [listDimmed, setListDimmed] = useState(false);
   const [staleList, setStaleList] = useState<Review[] | null>(null);
   const [dishBorn, setDishBorn] = useState(0);
   const ratingSecRef = useRef<HTMLElement>(null);
+  const lineRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const fadeT = useRef<number | null>(null);
+  const chipT = useRef<number | null>(null);
   const anchorTop = useRef<number | null>(null);
   const scrollHome = useRef(false);
   const listIntoView = useRef(false);
@@ -393,8 +402,9 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
   // on screen dimming out over 150ms, then the new list fades in. Reduced
   // motion commits and swaps without any fade.
   // kind: "apply" = selecting a filter ("scroll the list into view if it is
-  // below the fold"), "stabilize" = clearing (keep the viewport still),
-  // "home" = the pinned chip (also scroll back to the rating section).
+  // below the fold"), "stabilize" = row re-tap (keep the viewport still),
+  // "home" = the result line's Clear or the header chip (scroll back to the
+  // rating section).
   function transitionTo(mutate: () => void, kind: "apply" | "stabilize" | "home" = "apply") {
     if (fadeT.current !== null) window.clearTimeout(fadeT.current);
     if (kind === "stabilize") {
@@ -432,9 +442,12 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
     }, "apply");
   }
 
+  // Both clear affordances (the line's Clear button and the header chip)
+  // restore the dish section and scroll the rating section back under the
+  // header; the commit effect performs the actual scrolling.
   function clearRating() {
     if (ratingF === null) return;
-    transitionTo(() => setRatingF(null), "stabilize");
+    transitionTo(() => setRatingF(null), "home");
   }
 
   function clearFromChip() {
@@ -452,8 +465,9 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
       anchorTop.current = null;
     } else if (scrollHome.current && el) {
       scrollHome.current = false;
-      const top = Math.max(0, Math.round(el.getBoundingClientRect().top + window.scrollY - 58));
-      window.scrollTo({ top, behavior: reducedMotion() ? "auto" : "smooth" });
+      // Sections carry a scroll-margin-top of HEADER_H, so the block-start
+      // landing clears the fixed header exactly by its own height.
+      el.scrollIntoView({ block: "start", behavior: reducedMotion() ? "auto" : "smooth" });
     } else if (listIntoView.current && listRef.current) {
       const listTop = listRef.current.getBoundingClientRect().top;
       if (listTop >= window.innerHeight) {
@@ -463,25 +477,61 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
     }
   }, [ratingF, dishF]);
 
-  // Fixed-bar state: the bar's background and name follow the scroll position,
-  // and the same handler detects "scrolled past the rating section" for the
-  // filter chip (the section's bottom at or above the viewport top). Scroll
-  // position is the only input, so a plain listener covers every case - no
-  // observer quirks.
+  // Fixed-bar state: the bar's background and name follow the scroll position.
   useEffect(() => {
-    const update = () => {
-      const scrolled = window.scrollY > 90;
-      setPageScrolled((prev) => (prev === scrolled ? prev : scrolled));
-      const sec = ratingSecRef.current;
-      if (sec) {
-        const past = sec.getBoundingClientRect().bottom <= 0;
-        setRatingOnScreen((prev) => (prev === past ? prev : past));
+    const onScroll = () => setPageScrolled(window.scrollY > 90);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Docking: the result line is the filter's visible anchor. While any part
+  // of it is still on screen below the fixed header, the header shows only
+  // the restaurant name; the moment the line has scrolled past that header,
+  // its message docks into the header chip. Scrolling back hands off in
+  // reverse. The negative top rootMargin shrinks the observation area to
+  // "below the header", so the flips line up with the docking boundary.
+  useEffect(() => {
+    const line = lineRef.current;
+    if (ratingF === null || !line || typeof IntersectionObserver === "undefined") return;
+    function showChip() {
+      if (chipT.current !== null) {
+        window.clearTimeout(chipT.current);
+        chipT.current = null;
+      }
+      setChipState("in");
+    }
+    function hideChip() {
+      if (chipT.current !== null) {
+        window.clearTimeout(chipT.current);
+        chipT.current = null;
+      }
+      if (reducedMotion()) {
+        setChipState("none");
+        return;
+      }
+      setChipState("out");
+      chipT.current = window.setTimeout(() => {
+        chipT.current = null;
+        setChipState("none");
+      }, 120);
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) hideChip();
+        else showChip();
+      },
+      { rootMargin: `-${HEADER_H}px 0px 0px 0px` }
+    );
+    io.observe(line);
+    return () => {
+      io.disconnect();
+      if (chipT.current !== null) {
+        window.clearTimeout(chipT.current);
+        chipT.current = null;
       }
     };
-    update();
-    window.addEventListener("scroll", update, { passive: true });
-    return () => window.removeEventListener("scroll", update);
-  }, [data]);
+  }, [ratingF]);
 
   const allReviews = data ? (data.latestReview ? [data.latestReview, ...data.reviews] : data.reviews) : [];
 
@@ -545,8 +595,9 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
 
       {data && (
         <>
-          {/* Fixed top bar: transparent over the hero; page colour, name and
-              the rating-filter chip once the content has scrolled beneath */}
+          {/* Fixed top bar: transparent over the hero; page colour and the
+              restaurant name once content scrolls beneath. The filter's chip
+              docks here only while the result line is scrolled out of view. */}
           <div
             className={`fixed inset-x-0 top-0 z-20 mx-auto flex h-[52px] max-w-[480px] items-center gap-2 border-b px-4 motion-safe:transition-colors duration-150 ${
               pageScrolled ? "bg-[var(--bg)] border-[var(--border)]" : "bg-transparent border-transparent"
@@ -560,14 +611,16 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
             >
               {data.name}
             </span>
-            {ratingF !== null && !ratingOnScreen && (
+            {ratingF !== null && chipState !== "none" && (
               <button
                 type="button"
-                aria-label={`Clear the ${ratingF}-star filter`}
+                aria-label={`Clear ${ratingF} star filter, showing ${shown.length} review${shown.length === 1 ? "" : "s"}`}
                 onClick={clearFromChip}
-                className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--brand)] px-2.5 py-1.5 text-[13px] font-semibold text-[var(--on-brand)]"
+                className={`ml-auto inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full bg-[var(--brand)] px-3.5 text-[13px] font-semibold text-[var(--on-brand)] ${
+                  chipState === "in" ? "zt-chip-in" : "zt-chip-out"
+                }`}
               >
-                {ratingF} stars
+                {ratingF} stars · {shown.length} review{shown.length === 1 ? "" : "s"}
                 <XMiniIcon />
               </button>
             )}
@@ -597,7 +650,7 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
             ) : (
               <>
                 {/* Rating summary - two top-aligned columns, one at every width */}
-                <section ref={ratingSecRef} className="-mx-3.5 p-3.5" aria-label="Rating summary">
+                <section ref={ratingSecRef} className="-mx-3.5 scroll-mt-[52px] p-3.5" aria-label="Rating summary">
                   <div className="flex items-start gap-3">
                     <div className="w-[68px] shrink-0">
                       <p className="m-0 text-[36px] font-semibold leading-none tracking-[-0.01em]">{data.averageRating}</p>
@@ -708,7 +761,7 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
                 )}
 
                 {ratingF !== null && (
-                  <div id="filterResult" aria-live="polite" className="mt-4 flex items-center justify-between gap-3">
+                  <div id="filterResult" ref={lineRef} aria-live="polite" className="mt-4 flex items-center justify-between gap-3">
                     <p className="m-0 min-w-0 text-[13px] leading-[1.35]">
                       Showing {shown.length} {WORDS_FOR[ratingF]}-star review{shown.length === 1 ? "" : "s"}
                     </p>

@@ -139,5 +139,31 @@ body {
       opacity: 1;
     }
   }
+  /* Filter chip docking: slides in from the right while fading, fades out to
+     be unmounted (reduced-motion visitors see instant show/hide instead). */
+  .zt-chip-in {
+    animation: zchipin 180ms ease-out both;
+  }
+  @keyframes zchipin {
+    from {
+      opacity: 0;
+      transform: translateX(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  .zt-chip-out {
+    animation: zchipout 120ms ease both;
+  }
+  @keyframes zchipout {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
 }
 
