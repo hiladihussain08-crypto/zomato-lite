@@ -28,6 +28,9 @@
   /* Height of the fixed name bar on the reviews page; the filter chip's
      sticky row docks at top: var(--header-height). */
   --header-height: 52px;
+  /* Horizontal gutter shared by the fixed name bar, the docked chip row and
+     the review list: title, chip border and card edges all sit on this x. */
+  --page-gutter: 16px;
 }
 
 @theme inline {

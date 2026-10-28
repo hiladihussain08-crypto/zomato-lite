@@ -635,9 +635,10 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
               restaurant name once content scrolls beneath. The filter chip
               docks in its own sticky row below this bar. */}
           <div
-            className={`fixed inset-x-0 top-0 z-20 mx-auto flex h-[52px] max-w-[480px] items-center border-b px-4 motion-safe:transition-colors duration-150 ${
-              pageScrolled ? "bg-[var(--bg)] border-[var(--border)]" : "bg-transparent border-transparent"
+            className={`fixed inset-x-0 top-0 z-20 mx-auto flex h-[52px] max-w-[480px] items-center motion-safe:transition-colors duration-150 ${
+              pageScrolled ? "bg-[var(--bg)]" : "bg-transparent"
             }`}
+            style={{ paddingInline: "var(--page-gutter)" }}
           >
             <span
               className={`min-w-0 truncate text-[16px] font-semibold motion-safe:transition-opacity duration-150 ${
@@ -647,6 +648,18 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
             >
               {data.name}
             </span>
+            {/* Hairline inset to the shared content column so it starts and
+                ends exactly on the cards' x, not at the column's outer edge. */}
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute bottom-0 motion-safe:transition-[border-color] motion-safe:duration-150"
+              style={{
+                left: "var(--page-gutter)",
+                right: "var(--page-gutter)",
+                borderBottom: "0.5px solid",
+                borderColor: pageScrolled ? "var(--border)" : "transparent",
+              }}
+            />
           </div>
 
           {/* Hero */}
@@ -665,7 +678,10 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
             </div>
           </header>
 
-          <main className="bg-[var(--bg)] px-4 pb-[112px] pt-6 text-[var(--text)]">
+          <main
+            className="bg-[var(--bg)] pb-[112px] pt-6 text-[var(--text)]"
+            style={{ paddingInline: "var(--page-gutter)" }}
+          >
             {data.totalReviews === 0 ? (
               <section className="flex flex-col items-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--card)] px-3 py-6 text-center">
                 <p className="m-0 text-[var(--secondary)]">No reviews yet. Be the first to share one.</p>
@@ -805,8 +821,16 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
                       stays with the reviews as cards slide beneath it. */}
                   {ratingF !== null && chipState !== "none" && (
                     <div
-                      className="sticky z-20 flex h-[40px] items-center bg-[var(--bg)] px-4"
-                      style={{ top: "var(--header-height)", borderBottom: "0.5px solid var(--border)" }}
+                      className="sticky z-20 flex h-[40px] items-center bg-[var(--bg)]"
+                      style={{
+                        top: "var(--header-height)",
+                        // Escape main's gutter so the row's opaque background
+                        // covers the full column width, then re-apply the
+                        // gutter inside: the chip's left border lands exactly
+                        // on the cards' left edge instead of one gutter deeper.
+                        marginInline: "calc(-1 * var(--page-gutter))",
+                        paddingInline: "var(--page-gutter)",
+                      }}
                     >
                       <button
                         type="button"
@@ -817,6 +841,17 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
                         {shown.length} review{shown.length === 1 ? "" : "s"} · {ratingF} star{ratingF === 1 ? "" : "s"}
                         <XMiniIcon />
                       </button>
+                      {/* Row hairline, inset to the same content column as
+                          the header's hairline and the cards. */}
+                      <div
+                        aria-hidden="true"
+                        className="pointer-events-none absolute bottom-0"
+                        style={{
+                          left: "var(--page-gutter)",
+                          right: "var(--page-gutter)",
+                          borderBottom: "0.5px solid var(--border)",
+                        }}
+                      />
                     </div>
                   )}
                   <h2 id="reviewsHeading" className="m-0 text-[13px] font-semibold">
