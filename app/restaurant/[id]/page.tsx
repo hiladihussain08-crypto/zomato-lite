@@ -45,6 +45,10 @@ const WORDS_FOR = ["", "one", "two", "three", "four", "five"];
 // of the header when the page scrolls back to it.
 const HEADER_H = 52;
 
+// Height of the sticky chip row that docks below the header while a rating
+// filter is active. The first filtered review must clear header + row.
+const ROW_H = 40;
+
 function reducedMotion() {
   return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
@@ -85,9 +89,9 @@ function ChevronIcon({ className = "h-3 w-3" }: { className?: string }) {
   );
 }
 
-function XMiniIcon({ className = "h-3 w-3" }: { className?: string }) {
+function XMiniIcon({ className = "h-3 w-3", strokeWidth = 1.5 }: { className?: string; strokeWidth?: number }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth}
       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
       <path d="M18 6 6 18" />
       <path d="m6 6 12 12" />
@@ -316,6 +320,11 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
   const anchorTop = useRef<number | null>(null);
   const scrollHome = useRef(false);
   const listIntoView = useRef(false);
+  // The dock row mounts/unmounts in the flow above the list; its anchor
+  // position is captured right before the change so the commit can repair
+  // the viewport and the visible cards never jump.
+  const rowAnchor = useRef<number | null>(null);
+  const rowOnRef = useRef(false);
 
   // Anonymous, account-free helpful voting: one random id per browser,
   // persisted in localStorage, sent with every vote.
@@ -471,7 +480,9 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
     } else if (listIntoView.current && listRef.current) {
       const listTop = listRef.current.getBoundingClientRect().top;
       if (listTop >= window.innerHeight) {
-        window.scrollBy({ top: listTop - 58, behavior: reducedMotion() ? "auto" : "smooth" });
+        // Clear the header + dock row stack so the first filtered review
+        // lands fully visible.
+        window.scrollBy({ top: listTop - (HEADER_H + ROW_H), behavior: reducedMotion() ? "auto" : "smooth" });
       }
       listIntoView.current = false;
     }
@@ -494,11 +505,17 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
   useEffect(() => {
     const line = lineRef.current;
     if (ratingF === null || !line || typeof IntersectionObserver === "undefined") return;
+    function captureListTop() {
+      rowAnchor.current = listRef.current ? Math.round(listRef.current.getBoundingClientRect().top) : null;
+    }
     function showChip() {
       if (chipT.current !== null) {
         window.clearTimeout(chipT.current);
         chipT.current = null;
       }
+      // Mounting the dock row adds 40px of flow above the list - pin the
+      // cards' position first so the entry doesn't jump.
+      if (!rowOnRef.current) captureListTop();
       setChipState("in");
     }
     function hideChip() {
@@ -507,12 +524,14 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
         chipT.current = null;
       }
       if (reducedMotion()) {
+        if (rowOnRef.current) captureListTop();
         setChipState("none");
         return;
       }
       setChipState("out");
       chipT.current = window.setTimeout(() => {
         chipT.current = null;
+        if (rowOnRef.current) captureListTop();
         setChipState("none");
       }, 120);
     }
@@ -532,6 +551,23 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
       }
     };
   }, [ratingF]);
+
+  // Repair the viewport after the dock row's 40px of flow appears or
+  // disappears, so flips never shift the visible cards.
+  useEffect(() => {
+    const anchor = rowAnchor.current;
+    rowAnchor.current = null;
+    const el = listRef.current;
+    if (anchor === null || !el) return;
+    const delta = Math.round(el.getBoundingClientRect().top) - anchor;
+    if (Math.abs(delta) > 2) window.scrollBy({ top: delta });
+  }, [chipState, ratingF]);
+
+  // Mirror of "is the dock row on screen right now", read by the capture
+  // helpers between renders.
+  useEffect(() => {
+    rowOnRef.current = chipState !== "none" && ratingF !== null;
+  }, [chipState, ratingF]);
 
   const allReviews = data ? (data.latestReview ? [data.latestReview, ...data.reviews] : data.reviews) : [];
 
@@ -596,10 +632,10 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
       {data && (
         <>
           {/* Fixed top bar: transparent over the hero; page colour and the
-              restaurant name once content scrolls beneath. The filter's chip
-              docks here only while the result line is scrolled out of view. */}
+              restaurant name once content scrolls beneath. The filter chip
+              docks in its own sticky row below this bar. */}
           <div
-            className={`fixed inset-x-0 top-0 z-20 mx-auto flex h-[52px] max-w-[480px] items-center gap-2 border-b px-4 motion-safe:transition-colors duration-150 ${
+            className={`fixed inset-x-0 top-0 z-20 mx-auto flex h-[52px] max-w-[480px] items-center border-b px-4 motion-safe:transition-colors duration-150 ${
               pageScrolled ? "bg-[var(--bg)] border-[var(--border)]" : "bg-transparent border-transparent"
             }`}
           >
@@ -611,19 +647,6 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
             >
               {data.name}
             </span>
-            {ratingF !== null && chipState !== "none" && (
-              <button
-                type="button"
-                aria-label={`Clear ${ratingF} star filter, showing ${shown.length} review${shown.length === 1 ? "" : "s"}`}
-                onClick={clearFromChip}
-                className={`ml-auto inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full bg-[var(--brand)] px-3.5 text-[13px] font-semibold text-[var(--on-brand)] ${
-                  chipState === "in" ? "zt-chip-in" : "zt-chip-out"
-                }`}
-              >
-                {ratingF} stars · {shown.length} review{shown.length === 1 ? "" : "s"}
-                <XMiniIcon />
-              </button>
-            )}
           </div>
 
           {/* Hero */}
@@ -777,6 +800,25 @@ export default function RestaurantPage({ params }: { params: Promise<{ id: strin
 
                 {/* Reviews */}
                 <section aria-labelledby="reviewsHeading" className="mt-7">
+                  {/* Docked filter chip row: pins right below the fixed name
+                      bar while the result line is scrolled out of view, and
+                      stays with the reviews as cards slide beneath it. */}
+                  {ratingF !== null && chipState !== "none" && (
+                    <div
+                      className="sticky z-20 flex h-[40px] items-center bg-[var(--bg)] px-4"
+                      style={{ top: "var(--header-height)", borderBottom: "0.5px solid var(--border)" }}
+                    >
+                      <button
+                        type="button"
+                        aria-label={`Clear ${ratingF} star filter, showing ${shown.length} review${shown.length === 1 ? "" : "s"}`}
+                        onClick={clearFromChip}
+                        className={`zl-chip ${chipState === "in" ? "zt-chip-in" : "zt-chip-out"}`}
+                      >
+                        {shown.length} review{shown.length === 1 ? "" : "s"} · {ratingF} star{ratingF === 1 ? "" : "s"}
+                        <XMiniIcon />
+                      </button>
+                    </div>
+                  )}
                   <h2 id="reviewsHeading" className="m-0 text-[13px] font-semibold">
                     {headingText}
                   </h2>

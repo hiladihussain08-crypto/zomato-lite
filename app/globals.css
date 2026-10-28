@@ -22,6 +22,12 @@
   --skip-bg: #f1f0ed;
   --skip-text: #6b6b6b;
   --sklt: #edebe7;
+  /* Alias for "primary text" consumers (the filter chip). Resolves the
+     theme's --text dynamically, so the dark override flows through. */
+  --text-primary: var(--text);
+  /* Height of the fixed name bar on the reviews page; the filter chip's
+     sticky row docks at top: var(--header-height). */
+  --header-height: 52px;
 }
 
 @theme inline {
@@ -165,5 +171,43 @@ body {
       opacity: 0;
     }
   }
+}
+
+/* Reviews-page filter chip: a quiet outline pill that docks under the page
+   header in its own sticky row. The ::after grows the hit area to 44px in
+   every direction without changing the visible chip or the layout. */
+.zl-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px 0 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--text-primary) 50%, transparent);
+  background: transparent;
+  color: color-mix(in srgb, var(--text-primary) 90%, transparent);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+.zl-chip:hover {
+  background-color: color-mix(in srgb, var(--text-primary) 8%, transparent);
+}
+.zl-chip:active {
+  background-color: color-mix(in srgb, var(--text-primary) 14%, transparent);
+}
+.zl-chip:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+.zl-chip::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 999px;
 }
 
